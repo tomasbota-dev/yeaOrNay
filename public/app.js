@@ -2,7 +2,7 @@ const app = document.querySelector('#app');
 const toastEl = document.querySelector('#toast');
 const savedTheme = localStorage.getItem('yn_theme');
 const prefersPt = navigator.languages?.some(language => language.toLowerCase().startsWith('pt'));
-const state = { user: null, room: null, rooms: [], authMode: 'login', commentOpen: new Set(), commentDrafts: {}, ideaDraft: { title: '', details: '' }, busy: false, poll: null, toastTimer: null, theme: savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'), locale: localStorage.getItem('yn_locale') || (prefersPt ? 'pt-PT' : 'en-US') };
+const state = { user: null, room: null, rooms: [], authMode: 'login', authDraft: {}, commentOpen: new Set(), commentDrafts: {}, ideaDraft: { title: '', details: '' }, busy: false, poll: null, toastTimer: null, theme: savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'), locale: localStorage.getItem('yn_locale') || (prefersPt ? 'pt-PT' : 'en-US') };
 const messages = {
   'en-US': {},
   'pt-PT': {
@@ -10,6 +10,34 @@ const messages = {
   }
 };
 const t = key => messages[state.locale][key] || key;
+Object.assign(messages['en-US'], {
+  'Creating account…':'Creating your account…', 'Signing in…':'Signing you in…', 'Support reference':'Support reference',
+  'auth.serverSignup':'We couldn’t finish creating your account. If you already tried signing up, try signing in; the account may have been created. Please try again.',
+  'auth.serverLogin':'We couldn’t sign you in right now. Please try again in a moment.',
+  'auth.invalidEmail':'Check that your email address is entered correctly.', 'auth.invalidPassword':'Use a password between 10 and 128 characters.',
+  'auth.missingName':'Enter your name to create an account.', 'auth.duplicate':'That email is already registered. Try signing in instead.',
+  'auth.credentials':'Your email or password doesn’t match. Check them and try again.', 'auth.rateLimited':'Too many sign-in attempts. Wait 15 minutes, then try again.'
+});
+Object.assign(messages['pt-PT'], {
+  'Creating account…':'A criar conta…', 'Signing in…':'A iniciar sessão…', 'Support reference':'Referência de suporte',
+  'auth.serverSignup':'Não foi possível concluir a criação da conta. Se já tentaste criar uma conta, experimenta iniciar sessão; a conta pode ter sido criada. Tenta novamente.',
+  'auth.serverLogin':'Não foi possível iniciar sessão neste momento. Tenta novamente dentro de instantes.',
+  'auth.invalidEmail':'Confirma o endereço de e-mail e tenta novamente.', 'auth.invalidPassword':'A palavra-passe deve ter entre 10 e 128 caracteres.',
+  'auth.missingName':'Introduz o teu nome para criares uma conta.', 'auth.duplicate':'Este e-mail já está registado. Experimenta iniciar sessão.',
+  'auth.credentials':'O e-mail ou a palavra-passe não correspondem. Confirma os dados e tenta novamente.', 'auth.rateLimited':'Demasiadas tentativas. Aguarda 15 minutos e tenta novamente.'
+});
+const explainAuthError = (message, path, status, ray) => {
+  let key = message;
+  if (status >= 500) key = path.endsWith('/signup') ? 'auth.serverSignup' : path.endsWith('/login') ? 'auth.serverLogin' : 'Something went wrong. Please try again.';
+  else if (message === 'Enter a valid email address.') key = 'auth.invalidEmail';
+  else if (message.startsWith('Password must be')) key = 'auth.invalidPassword';
+  else if (message === 'Name is required.') key = 'auth.missingName';
+  else if (message.startsWith('An account with that email already exists.')) key = 'auth.duplicate';
+  else if (message.startsWith('Email or password didn’t match.')) key = 'auth.credentials';
+  else if (message.startsWith('Too many tries.')) key = 'auth.rateLimited';
+  const detail = t(key);
+  return status >= 500 && ray ? `${detail} ${t('Support reference')}: ${ray}.` : detail;
+};
 const localizeMarkup = markup => {
   if (state.locale !== 'pt-PT') return markup;
   const template = document.createElement('template'); template.innerHTML = markup;
@@ -28,7 +56,7 @@ const dateLabel = value => new Intl.DateTimeFormat(state.locale, { month: 'short
 const api = async (path, options = {}) => {
   const response = await fetch(`/api${path}`, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) } });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) { const error = new Error(data.error || 'Something went wrong. Try again.'); error.status = response.status; throw error; }
+  if (!response.ok) { const error = new Error(explainAuthError(data.error || 'Something went wrong. Please try again.', path, response.status, response.headers.get('cf-ray')?.split('-')[0])); error.status = response.status; throw error; }
   return data;
 };
 function toast(message, error = false) { toastEl.textContent = message; toastEl.className = `toast show${error ? ' error' : ''}`; clearTimeout(state.toastTimer); state.toastTimer = setTimeout(() => toastEl.className = 'toast', 2600); }
@@ -39,7 +67,7 @@ function topbar() { return `<header class="topbar"><a href="/" class="brand" dat
 function footer() { return `<footer class="footer"><span>${t('Made for making plans ✦')}</span><span>${t('Small decisions, big memories.')}</span></footer>`; }
 function authView() {
   const signUp = state.authMode === 'signup';
-  return `<main class="auth-wrap"><section class="auth-art"><div class="auth-topline"><a class="brand" href="/" data-action="home"><span class="brand-icon">✦</span> yea or nay</a>${preferenceControls()}</div><div><h1>${t('Better plans start with a little yes.')}</h1><p>${t('Bring everyone into the decision. Then get to the fun part.')}</p></div><div class="orbit"></div><div class="auth-sticker">✷</div></section><section class="auth-box"><p class="eyebrow">${t(signUp ? 'Your next good plan starts here' : 'Welcome back')}</p><h2>${t(signUp ? 'Make an account' : 'Good to see you')}</h2><p>${t(signUp ? 'Get your people together and pick something fun.' : 'Your people and plans are waiting.')}</p><div class="auth-toggle"><button class="${!signUp ? 'active' : ''}" data-action="auth-mode" data-mode="login">${t('Log in')}</button><button class="${signUp ? 'active' : ''}" data-action="auth-mode" data-mode="signup">${t('Sign up')}</button></div><form id="auth-form"><div class="form-error" id="form-error"></div>${signUp ? `<div class="field"><label for="name">${t('What should we call you?')}</label><input id="name" name="name" autocomplete="name" maxlength="40" placeholder="${t('Your name')}" required /></div>` : ''}<div class="field"><label for="email">${t('Email address')}</label><input id="email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@example.com" required /></div><div class="field"><label for="password">${t('Password')}</label><input id="password" name="password" type="password" autocomplete="${signUp ? 'new-password' : 'current-password'}" minlength="10" maxlength="128" placeholder="${t('At least 10 characters')}" required /></div><button class="btn btn-primary btn-block" type="submit" ${state.busy ? 'disabled' : ''}>${state.busy ? '<span class="spinner"></span>' : signUp ? `${t('Create my account')} <span>→</span>` : `${t('Log in')} <span>→</span>`}</button></form></section></main>`;
+  return `<main class="auth-wrap"><section class="auth-art"><div class="auth-topline"><a class="brand" href="/" data-action="home"><span class="brand-icon">✦</span> yea or nay</a>${preferenceControls()}</div><div><h1>${t('Better plans start with a little yes.')}</h1><p>${t('Bring everyone into the decision. Then get to the fun part.')}</p></div><div class="orbit"></div><div class="auth-sticker">✷</div></section><section class="auth-box"><p class="eyebrow">${t(signUp ? 'Your next good plan starts here' : 'Welcome back')}</p><h2>${t(signUp ? 'Make an account' : 'Good to see you')}</h2><p>${t(signUp ? 'Get your people together and pick something fun.' : 'Your people and plans are waiting.')}</p><div class="auth-toggle"><button class="${!signUp ? 'active' : ''}" data-action="auth-mode" data-mode="login">${t('Log in')}</button><button class="${signUp ? 'active' : ''}" data-action="auth-mode" data-mode="signup">${t('Sign up')}</button></div><form id="auth-form"><div class="form-error" id="form-error" role="alert" aria-live="polite"></div>${signUp ? `<div class="field"><label for="name">${t('What should we call you?')}</label><input id="name" name="name" autocomplete="name" maxlength="40" value="${esc(state.authDraft.name || '')}" placeholder="${t('Your name')}" required /></div>` : ''}<div class="field"><label for="email">${t('Email address')}</label><input id="email" name="email" type="email" autocomplete="email" maxlength="254" value="${esc(state.authDraft.email || '')}" placeholder="you@example.com" required /></div><div class="field"><label for="password">${t('Password')}</label><input id="password" name="password" type="password" autocomplete="${signUp ? 'new-password' : 'current-password'}" minlength="10" maxlength="128" value="${esc(state.authDraft.password || '')}" placeholder="${t('At least 10 characters')}" required /></div><button class="btn btn-primary btn-block" type="submit" ${state.busy ? 'disabled' : ''}>${state.busy ? `<span class="spinner"></span>${t(signUp ? 'Creating account…' : 'Signing in…')}` : signUp ? `${t('Create my account')} <span>→</span>` : `${t('Log in')} <span>→</span>`}</button></form></section></main>`;
 }
 function roomCard(room, index) {
   const emojis = ['🎲', '🍜', '🌿', '🎬'];
@@ -100,6 +128,8 @@ async function boot() {
 }
 function showFormError(message) { const el = document.querySelector('#form-error'); if (el) { el.textContent = message; el.style.display = 'block'; } else toast(message, true); }
 app.addEventListener('input', event => {
+  const authForm = event.target.closest('#auth-form');
+  if (authForm) { state.authDraft[event.target.name] = event.target.value; const error = authForm.querySelector('#form-error'); if (error) { error.textContent = ''; error.style.display = 'none'; } }
   const form = event.target.closest('#idea-form');
   if (form) state.ideaDraft[event.target.name] = event.target.value;
   const comments = event.target.closest('[data-comment-form]');
@@ -109,8 +139,8 @@ app.addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.target;
   if (form.id === 'auth-form') {
-    const data = Object.fromEntries(new FormData(form)); state.busy = true; renderRoute();
-    try { const result = await api(state.authMode === 'signup' ? '/auth/signup' : '/auth/login', { method: 'POST', body: JSON.stringify(data) }); state.user = result.user; if (getRoute().page === 'room') await refreshRoom(true); else await loadHome(); }
+    const data = Object.fromEntries(new FormData(form)); state.authDraft = data; state.busy = true; renderRoute();
+    try { const result = await api(state.authMode === 'signup' ? '/auth/signup' : '/auth/login', { method: 'POST', body: JSON.stringify(data) }); state.user = result.user; state.authDraft = {}; if (getRoute().page === 'room') await refreshRoom(true); else await loadHome(); }
     catch (e) { state.busy = false; renderRoute(); showFormError(e.message); }
     return;
   }

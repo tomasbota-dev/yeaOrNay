@@ -6,7 +6,8 @@ interface Env {
 
 type UserRow = { id: string; email: string; display_name: string; password_hash: string; password_salt: string };
 const SESSION_DAYS = 30;
-const HASH_ITERATIONS = 310_000;
+// Workers Web Crypto limits PBKDF2 to 100,000 iterations.
+const HASH_ITERATIONS = 100_000;
 const encoder = new TextEncoder();
 
 function json(data: unknown, status = 200, headers: HeadersInit = {}) {

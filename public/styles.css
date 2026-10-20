@@ -26,3 +26,4 @@
 
 /* Keep decorative auth artwork out of the header controls' hit area. */
 .auth-art .orbit,.auth-art .auth-sticker{pointer-events:none}.auth-art .auth-sticker{z-index:0}.auth-art .auth-topline,.auth-art .auth-topline .brand,.auth-art .auth-topline .pref-controls{position:relative;z-index:5}.auth-art .auth-topline .pref-controls{flex-shrink:0}.auth-art .auth-topline .pref-button{position:relative;z-index:6;touch-action:manipulation}
+.form-error{white-space:pre-line;line-height:1.5}
