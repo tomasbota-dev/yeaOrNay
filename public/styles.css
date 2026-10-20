@@ -34,3 +34,6 @@
 .timer-value{white-space:nowrap}
 @media(max-width:760px){.timer-helper{display:flex}.timer-note{display:none}}
 @media(max-width:540px){.timer-bar{align-items:flex-start;flex-direction:column}.timer-helper{align-items:flex-start;text-align:left}}
+:root[data-theme="dark"] .room-code-pill,:root[data-theme="dark"] .btn-light{background:#302b39;color:var(--ink);border-color:var(--line)}
+:root[data-theme="dark"] .timer-bar{background:#302b39;color:var(--ink)}
+:root[data-theme="dark"] .timer-bar.timer-closed{background:#362a64;color:#fff}
