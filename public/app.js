@@ -26,6 +26,14 @@ Object.assign(messages['pt-PT'], {
   'auth.missingName':'Introduz o teu nome para criares uma conta.', 'auth.duplicate':'Este e-mail já está registado. Experimenta iniciar sessão.',
   'auth.credentials':'O e-mail ou a palavra-passe não correspondem. Confirma os dados e tenta novamente.', 'auth.rateLimited':'Demasiadas tentativas. Aguarda 15 minutos e tenta novamente.'
 });
+Object.assign(messages['pt-PT'], {
+  'Custom date & time':'Data e hora personalizadas', 'End date and time':'Data e hora de fim',
+  'Add a question so your group knows what to decide.':'Escreve uma pergunta para o grupo saber o que vai decidir.',
+  'Choose an end date and time in the future.':'Escolhe uma data e hora futuras para terminar a votação.',
+  'Enter the room code your friend shared with you.':'Introduz o código da sala que te enviaram.',
+  'Room name is required.':'Indica o que o grupo vai decidir.',
+  'Choose one of the available time limits.':'Escolhe um dos limites de tempo disponíveis.'
+});
 const explainAuthError = (message, path, status, ray) => {
   let key = message;
   if (status >= 500) key = path.endsWith('/signup') ? 'auth.serverSignup' : path.endsWith('/login') ? 'auth.serverLogin' : 'Something went wrong. Please try again.';
@@ -94,8 +102,11 @@ function roomView() {
 }
 function modal(content) { document.querySelector('.modal-backdrop')?.remove(); document.body.insertAdjacentHTML('beforeend', localizeMarkup(`<div class="modal-backdrop" data-action="backdrop"><section class="modal" role="dialog" aria-modal="true">${content}</section></div>`)); document.querySelector('.modal input')?.focus(); }
 function closeModal() { document.querySelector('.modal-backdrop')?.remove(); }
-function createModal() { modal(`<header class="modal-head"><h2>Start a room ✨</h2><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></header><p style="font-size:13px;color:#85818f;margin:-7px 0 19px">Give your group a question to decide. You can add ideas once it’s open.</p><form id="create-form"><div class="field"><label for="room-name">What are we deciding?</label><input id="room-name" name="name" maxlength="70" placeholder="Friday night plans, anyone?" required /></div><div class="field"><label for="duration">How long should voting last?</label><select id="duration" name="duration"><option value="15">15 minutes · quick pick</option><option value="30" selected>30 minutes · just right</option><option value="60">1 hour · take your time</option><option value="180">3 hours</option><option value="1440">24 hours · decide tomorrow</option></select></div><div class="modal-actions"><button type="button" class="btn btn-light" data-action="close-modal">Maybe later</button><button class="btn btn-primary" type="submit">Open the room →</button></div></form>`); }
-function joinModal() { modal(`<header class="modal-head"><h2>Join your people 👋</h2><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></header><p style="font-size:13px;color:#85818f;margin:-7px 0 19px">Enter the room code your friend shared with you.</p><form id="join-form"><div class="field"><label for="join-code">Room code</label><input id="join-code" name="code" maxlength="8" placeholder="E.G. SUNNY7" autocomplete="off" style="text-transform:uppercase;letter-spacing:2px;font-weight:800" required /></div><div class="modal-actions"><button type="button" class="btn btn-light" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Join room →</button></div></form>`); }
+function createModal() { modal(`<header class="modal-head"><h2>Start a room ✨</h2><button type="button" class="close-modal" data-action="close-modal" aria-label="Close">×</button></header><p style="font-size:13px;color:#85818f;margin:-7px 0 19px">Give your group a question to decide. You can add ideas once it’s open.</p><form id="create-form" novalidate><div class="field"><label for="room-name">What are we deciding?</label><input id="room-name" name="name" maxlength="70" placeholder="Friday night plans, anyone?" /></div><div class="field"><label for="duration">How long should voting last?</label><select id="duration" name="duration"><option value="15">15 minutes · quick pick</option><option value="30" selected>30 minutes · just right</option><option value="60">1 hour · take your time</option><option value="180">3 hours</option><option value="1440">24 hours · decide tomorrow</option><option value="custom">Custom date &amp; time</option></select></div><div class="field custom-end-field" id="custom-end-field" hidden><label for="ends-at">End date and time</label><input id="ends-at" name="endsAt" type="datetime-local" disabled /></div><div class="form-error" id="modal-error" role="alert" aria-live="polite"></div><div class="modal-actions"><button type="button" class="btn btn-light" data-action="close-modal">Maybe later</button><button class="btn btn-primary" type="submit">Open the room →</button></div></form>`); }
+function joinModal() { modal(`<header class="modal-head"><h2>Join your people 👋</h2><button type="button" class="close-modal" data-action="close-modal" aria-label="Close">×</button></header><p style="font-size:13px;color:#85818f;margin:-7px 0 19px">Enter the room code your friend shared with you.</p><form id="join-form" novalidate><div class="field"><label for="join-code">Room code</label><input id="join-code" name="code" maxlength="8" placeholder="E.G. SUNNY7" autocomplete="off" style="text-transform:uppercase;letter-spacing:2px;font-weight:800" /></div><div class="form-error" id="modal-error" role="alert" aria-live="polite"></div><div class="modal-actions"><button type="button" class="btn btn-light" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Join room →</button></div></form>`); }
+function showModalError(message, fieldId) { const error = document.querySelector('#modal-error'); if (error) { error.textContent = t(message); error.style.display = 'block'; document.getElementById(fieldId)?.focus(); } else toast(t(message), true); }
+function clearModalError() { const error = document.querySelector('#modal-error'); if (error) { error.textContent = ''; error.style.display = 'none'; } }
+function setCustomEndDate() { const select = document.querySelector('#duration'), field = document.querySelector('#custom-end-field'), input = document.querySelector('#ends-at'); if (!select || !field || !input) return; const custom = select.value === 'custom'; field.hidden = !custom; input.disabled = !custom; if (custom && !input.value) { const localValue = date => { const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000); return adjusted.toISOString().slice(0, 16); }; input.min = localValue(new Date()); input.value = localValue(new Date(Date.now() + 30 * 60_000)); } }
 function renderRoute() {
   clearInterval(state.poll);
   if (!state.user) { app.innerHTML = authView(); return; }
@@ -135,7 +146,7 @@ app.addEventListener('input', event => {
   const comments = event.target.closest('[data-comment-form]');
   if (comments) state.commentDrafts[comments.dataset.commentForm] = event.target.value;
 });
-app.addEventListener('submit', async event => {
+document.addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.target;
   if (form.id === 'auth-form') {
@@ -145,14 +156,14 @@ app.addEventListener('submit', async event => {
     return;
   }
   try {
-    if (form.id === 'create-form') { const data = Object.fromEntries(new FormData(form)); const result = await api('/rooms', { method: 'POST', body: JSON.stringify(data) }); closeModal(); navigate(`/room/${result.room.code}`); await refreshRoom(true); }
-    else if (form.id === 'join-form') { const data = Object.fromEntries(new FormData(form)); const result = await api('/rooms/join', { method: 'POST', body: JSON.stringify(data) }); closeModal(); navigate(`/room/${result.room.code}`); await refreshRoom(true); }
+    if (form.id === 'create-form') { const data = Object.fromEntries(new FormData(form)); data.name = String(data.name || '').trim(); if (!data.name) { showModalError('Add a question so your group knows what to decide.', 'room-name'); return; } if (data.duration === 'custom') { const end = new Date(data.endsAt).getTime(); if (!data.endsAt || !Number.isFinite(end) || end <= Date.now()) { showModalError('Choose an end date and time in the future.', 'ends-at'); return; } data.endsAt = end; } else delete data.endsAt; const result = await api('/rooms', { method: 'POST', body: JSON.stringify(data) }); closeModal(); navigate(`/room/${result.room.code}`); await refreshRoom(true); }
+    else if (form.id === 'join-form') { const data = Object.fromEntries(new FormData(form)); data.code = String(data.code || '').trim(); if (!data.code) { showModalError('Enter the room code your friend shared with you.', 'join-code'); return; } const result = await api('/rooms/join', { method: 'POST', body: JSON.stringify(data) }); closeModal(); navigate(`/room/${result.room.code}`); await refreshRoom(true); }
     else if (form.id === 'idea-form') { const data = Object.fromEntries(new FormData(form)); await api(`/rooms/${getRoute().code}/ideas`, { method: 'POST', body: JSON.stringify(data) }); state.ideaDraft = { title: '', details: '' }; await refreshRoom(true); }
     else if (form.matches('[data-comment-form]')) { const ideaId = form.dataset.commentForm; const data = Object.fromEntries(new FormData(form)); await api(`/ideas/${ideaId}/comments`, { method: 'POST', body: JSON.stringify(data) }); state.commentDrafts[ideaId] = ''; state.commentOpen.add(ideaId); await refreshRoom(true); }
-  } catch (e) { toast(e.message, true); }
+  } catch (e) { if (form.id === 'create-form') showModalError(e.message, 'room-name'); else if (form.id === 'join-form') showModalError(e.message, 'join-code'); else toast(e.message, true); }
 });
-app.addEventListener('click', async event => {
-  const trigger = event.target.closest('[data-action]'); if (!trigger) return;
+document.addEventListener('click', async event => {
+  const trigger = event.target instanceof Element ? event.target.closest('[data-action]') : null; if (!trigger) return;
   const action = trigger.dataset.action;
   if (action === 'backdrop' && event.target === trigger) { closeModal(); return; }
   if (action === 'close-modal') { closeModal(); return; }
@@ -170,6 +181,8 @@ app.addEventListener('click', async event => {
   if (action === 'vote') { try { await api(`/ideas/${trigger.dataset.id}/vote`, { method: 'PUT', body: JSON.stringify({ value: Number(trigger.dataset.value) }) }); await refreshRoom(true); } catch (e) { toast(e.message, true); } return; }
   if (action === 'end-room') { if (confirm('End voting now and reveal the winning idea?')) { try { await api(`/rooms/${getRoute().code}/close`, { method: 'POST' }); await refreshRoom(true); } catch (e) { toast(e.message, true); } } return; }
 });
+document.addEventListener('change', event => { if (event.target?.id === 'duration') { clearModalError(); setCustomEndDate(); } });
+document.addEventListener('input', event => { if (event.target?.closest('#create-form, #join-form')) clearModalError(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('[data-action="open-room"]')) { event.preventDefault(); navigate(`/room/${event.target.dataset.code}`); refreshRoom(true); } });
 window.addEventListener('popstate', async () => { if (getRoute().page === 'room') await refreshRoom(true); else await loadHome(); });
 boot();

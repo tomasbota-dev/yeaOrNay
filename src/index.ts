@@ -120,10 +120,18 @@ async function listRooms(userId: string, env: Env) {
 async function createRoom(request: Request, userId: string, env: Env) {
   const input = await body(request);
   const name = stringField(input.name, 70, 'Room name');
-  const duration = Number(input.duration);
-  if (![15, 30, 60, 180, 1440].includes(duration)) throw new HttpError('Choose one of the available time limits.');
   const id = randomId(), created = Date.now(), code = makeCode();
-  const room = await env.DB.prepare('INSERT INTO rooms(id,code,name,host_id,duration_minutes,created_at,ends_at) VALUES(?,?,?,?,?,?,?) RETURNING id,code,name,created_at,ends_at,status,host_id').bind(id, code, name, userId, duration, created, created + duration * 60_000).first();
+  let duration: number, endsAt: number;
+  if (input.endsAt !== undefined && input.endsAt !== '') {
+    endsAt = Number(input.endsAt);
+    if (!Number.isFinite(endsAt) || endsAt <= created) throw new HttpError('Choose an end date and time in the future.');
+    duration = Math.ceil((endsAt - created) / 60_000);
+  } else {
+    duration = Number(input.duration);
+    if (![15, 30, 60, 180, 1440].includes(duration)) throw new HttpError('Choose one of the available time limits.');
+    endsAt = created + duration * 60_000;
+  }
+  const room = await env.DB.prepare('INSERT INTO rooms(id,code,name,host_id,duration_minutes,created_at,ends_at) VALUES(?,?,?,?,?,?,?) RETURNING id,code,name,created_at,ends_at,status,host_id').bind(id, code, name, userId, duration, created, endsAt).first();
   await env.DB.prepare('INSERT INTO room_members(room_id,user_id,joined_at) VALUES(?,?,?)').bind(id, userId, created).run();
   return json({ room }, 201);
 }
