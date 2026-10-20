@@ -27,3 +27,10 @@
 /* Keep decorative auth artwork out of the header controls' hit area. */
 .auth-art .orbit,.auth-art .auth-sticker{pointer-events:none}.auth-art .auth-sticker{z-index:0}.auth-art .auth-topline,.auth-art .auth-topline .brand,.auth-art .auth-topline .pref-controls{position:relative;z-index:5}.auth-art .auth-topline .pref-controls{flex-shrink:0}.auth-art .auth-topline .pref-button{position:relative;z-index:6;touch-action:manipulation}
 .form-error{white-space:pre-line;line-height:1.5}
+.timer-helper{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
+.timer-ends{color:#e2dfeb;font-size:12px;white-space:nowrap}
+.timer-ends strong{color:#fff;font-weight:800}
+.timer-note{font-size:10px;color:#c5c1d0}
+.timer-value{white-space:nowrap}
+@media(max-width:760px){.timer-helper{display:flex}.timer-note{display:none}}
+@media(max-width:540px){.timer-bar{align-items:flex-start;flex-direction:column}.timer-helper{align-items:flex-start;text-align:left}}
