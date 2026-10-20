@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yea-or-nay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-20",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "yea-or-nay-db",
+      "database_id": "ad4bb80d-3a16-4ef9-9c9f-ff9c2919e1dc",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "observability": { "enabled": true }
+}
