@@ -13,13 +13,15 @@ A tiny, mobile-first way for friends and family to pick a plan together. Create 
 - Room updates every five seconds while open
 - The host can end voting early; otherwise the first request after the deadline closes voting
 - The highest-scoring idea wins. Tied ideas share the win.
-- Mobile-responsive layout and installable web app manifest
+- Mobile-responsive layout, app icon, and browser theme colors
 
 ## Stack
 
 - Static HTML, CSS, and JavaScript served by one Cloudflare Worker
 - Cloudflare D1 (SQLite) for accounts, rooms, ideas, votes, and comments
 - No client-side framework, realtime service, email provider, or paid API
+
+The whole app is a single small Worker bundle to keep deployment simple. Page assets are also served by the Worker, so they use the Workers request allowance; active rooms poll every five seconds. This is sized for small friend and family groups.
 
 ## Local development
 

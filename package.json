@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "predev": "npm run build:static",
     "deploy": "wrangler deploy",
+    "predeploy": "npm run build:static",
+    "build:static": "node scripts/build-static.mjs",
     "db:local": "wrangler d1 migrations apply yea-or-nay-db --local",
     "db:remote": "wrangler d1 migrations apply yea-or-nay-db --remote",
     "types": "wrangler types",

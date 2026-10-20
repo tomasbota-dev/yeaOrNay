@@ -105,7 +105,7 @@ app.addEventListener('click', async event => {
   if (action === 'backdrop' && event.target === trigger) { closeModal(); return; }
   if (action === 'close-modal') { closeModal(); return; }
   if (action === 'auth-mode') { state.authMode = trigger.dataset.mode; renderRoute(); return; }
-  if (action === 'home') { navigate('/'); await loadHome(); return; }
+  if (action === 'home') { event.preventDefault(); navigate('/'); await loadHome(); return; }
   if (action === 'create-modal') { createModal(); return; }
   if (action === 'join-modal') { joinModal(); return; }
   if (action === 'open-room') { navigate(`/room/${trigger.dataset.code}`); await refreshRoom(true); return; }

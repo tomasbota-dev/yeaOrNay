@@ -1,6 +1,7 @@
+import { STATIC_FILES } from './static-assets';
+
 interface Env {
   DB: D1Database;
-  ASSETS: Fetcher;
 }
 
 type UserRow = { id: string; email: string; display_name: string; password_hash: string; password_salt: string };
@@ -108,6 +109,7 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
   return json({ user: { id: user.id, email: user.email, name: user.display_name } }, 200, { 'set-cookie': sessionCookie(token, SESSION_DAYS * 24 * 60 * 60) });
 }
 async function listRooms(userId: string, env: Env) {
+  await env.DB.prepare("UPDATE rooms SET status='closed' WHERE status='open' AND ends_at<=?").bind(Date.now()).run();
   const result = await env.DB.prepare(`SELECT r.id,r.code,r.name,r.created_at,r.ends_at,r.status,
     (SELECT COUNT(*) FROM room_members m WHERE m.room_id=r.id) member_count,
     (SELECT COUNT(*) FROM ideas i WHERE i.room_id=r.id) idea_count
@@ -233,11 +235,16 @@ function secureAssetResponse(response: Response) {
   headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
+function staticAsset(path: string) {
+  const asset = STATIC_FILES[path] || STATIC_FILES['/'];
+  const cache = path === '/' || asset.type.startsWith('text/html') ? 'no-cache' : 'public, max-age=300';
+  return secureAssetResponse(new Response(asset.body, { headers: { 'content-type': asset.type, 'cache-control': cache } }));
+}
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       if (new URL(request.url).pathname.startsWith('/api/')) return await apiRoute(request, env);
-      return secureAssetResponse(await env.ASSETS.fetch(request));
+      return staticAsset(new URL(request.url).pathname);
     } catch (error) {
       if (error instanceof HttpError) return fail(error.message, error.status);
       console.error('Request failed', error);
