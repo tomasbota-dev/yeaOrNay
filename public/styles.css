@@ -23,3 +23,6 @@
 :root[data-theme="dark"] .winner-banner span{color:#d4c48f}
 :root[data-theme="dark"] .form-error{background:#462622;color:#ffb1a7}
 @media(max-width:760px){.auth-art{min-height:180px;padding:22px 21px}.auth-art h1{font-size:27px;max-width:285px}.auth-art p{max-width:260px}.auth-topline{position:relative;z-index:2}.auth-sticker{font-size:38px;right:17px;bottom:23px}.top-actions{gap:5px}.topbar .brand{font-size:16px;gap:7px}.topbar .brand-icon{width:30px;height:30px}.user-chip{padding-right:8px}.user-chip>span:last-child{display:none}}
+
+/* Keep decorative auth artwork out of the header controls' hit area. */
+.auth-art .orbit,.auth-art .auth-sticker{pointer-events:none}.auth-art .auth-sticker{z-index:0}.auth-art .auth-topline,.auth-art .auth-topline .brand,.auth-art .auth-topline .pref-controls{position:relative;z-index:5}.auth-art .auth-topline .pref-controls{flex-shrink:0}.auth-art .auth-topline .pref-button{position:relative;z-index:6;touch-action:manipulation}
