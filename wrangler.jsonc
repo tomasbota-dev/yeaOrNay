@@ -12,5 +12,6 @@
       "migrations_dir": "./migrations"
     }
   ],
+  "r2_buckets": [{ "binding": "ICONS", "bucket_name": "yea-or-nay-room-icons" }],
   "observability": { "enabled": true }
 }

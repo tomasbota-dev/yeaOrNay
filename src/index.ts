@@ -2,6 +2,7 @@ import { STATIC_FILES } from './static-assets';
 
 interface Env {
   DB: D1Database;
+  ICONS: R2Bucket;
 }
 
 type UserRow = { id: string; email: string; display_name: string; password_hash: string; password_salt: string };
@@ -111,7 +112,7 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
 }
 async function listRooms(userId: string, env: Env) {
   await env.DB.prepare("UPDATE rooms SET status='closed' WHERE status='open' AND ends_at<=?").bind(Date.now()).run();
-  const result = await env.DB.prepare(`SELECT r.id,r.code,r.name,r.created_at,r.ends_at,r.status,
+  const result = await env.DB.prepare(`SELECT r.id,r.code,r.name,r.icon,r.created_at,r.ends_at,r.status,
     (SELECT COUNT(*) FROM room_members m WHERE m.room_id=r.id) member_count,
     (SELECT COUNT(*) FROM ideas i WHERE i.room_id=r.id) idea_count
     FROM rooms r JOIN room_members mine ON mine.room_id=r.id WHERE mine.user_id=? ORDER BY r.created_at DESC LIMIT 50`).bind(userId).all();
@@ -131,7 +132,8 @@ async function createRoom(request: Request, userId: string, env: Env) {
     if (![15, 30, 60, 180, 1440].includes(duration)) throw new HttpError('Choose one of the available time limits.');
     endsAt = created + duration * 60_000;
   }
-  const room = await env.DB.prepare('INSERT INTO rooms(id,code,name,host_id,duration_minutes,created_at,ends_at) VALUES(?,?,?,?,?,?,?) RETURNING id,code,name,created_at,ends_at,status,host_id').bind(id, code, name, userId, duration, created, endsAt).first();
+  const icon = typeof input.icon === 'string' && ['🎲','🍜','🌿','🎬','🎨','🏖️','🎮','🍕','🎵','🧩'].includes(input.icon) ? input.icon : '🎲';
+  const room = await env.DB.prepare('INSERT INTO rooms(id,code,name,icon,host_id,duration_minutes,created_at,ends_at) VALUES(?,?,?,?,?,?,?,?) RETURNING id,code,name,icon,created_at,ends_at,status,host_id').bind(id, code, name, icon, userId, duration, created, endsAt).first();
   await env.DB.prepare('INSERT INTO room_members(room_id,user_id,joined_at) VALUES(?,?,?)').bind(id, userId, created).run();
   return json({ room }, 201);
 }
@@ -140,6 +142,8 @@ async function joinRoom(request: Request, userId: string, env: Env) {
   const code = stringField(input.code, 8, 'Room code').toUpperCase().replace(/\s/g, '');
   const room = await env.DB.prepare('SELECT id,code,name,status FROM rooms WHERE code=?').bind(code).first<{ id: string; code: string; name: string; status: string }>();
   if (!room) throw new HttpError('We couldn’t find a room with that code.', 404);
+  const banned = await env.DB.prepare('SELECT 1 FROM room_bans WHERE room_id=? AND user_id=?').bind(room.id, userId).first();
+  if (banned) throw new HttpError('The host removed you from this room.', 403);
   await env.DB.prepare('INSERT OR IGNORE INTO room_members(room_id,user_id,joined_at) VALUES(?,?,?)').bind(room.id, userId, Date.now()).run();
   return json({ room });
 }
@@ -149,7 +153,7 @@ async function roomSnapshot(code: string, userId: string, env: Env) {
   await requireMember(found.id, userId, env);
   const now = Date.now();
   if (found.status === 'open' && found.ends_at <= now) await env.DB.prepare("UPDATE rooms SET status='closed' WHERE id=? AND status='open' AND ends_at<=?").bind(found.id, now).run();
-  const room = await env.DB.prepare(`SELECT r.id,r.code,r.name,r.host_id,r.created_at,r.ends_at,r.status,u.display_name host_name
+  const room = await env.DB.prepare(`SELECT r.id,r.code,r.name,r.icon,r.host_id,r.created_at,r.ends_at,r.status,u.display_name host_name
     FROM rooms r JOIN users u ON u.id=r.host_id WHERE r.id=?`).bind(found.id).first<Record<string, any>>();
   const [members, ideas, comments] = await Promise.all([
     env.DB.prepare('SELECT u.id,u.display_name name,rm.joined_at FROM room_members rm JOIN users u ON u.id=rm.user_id WHERE rm.room_id=? ORDER BY rm.joined_at').bind(found.id).all(),
@@ -163,6 +167,58 @@ async function roomSnapshot(code: string, userId: string, env: Env) {
   const max = ideaRows.length ? Math.max(...ideaRows.map(i => Number(i.score))) : null;
   const winners = room?.status === 'closed' && max !== null ? ideaRows.filter(i => Number(i.score) === max).map(i => i.id) : [];
   return json({ ...room, is_host: room?.host_id === userId, members: members.results.map((m: any) => ({ id: m.id, name: m.name, joined_at: m.joined_at })), ideas: ideaRows.map(i => ({ ...i, score: Number(i.score), my_vote: Number(i.my_vote), winner: winners.includes(i.id) })), comments: comments.results, winner_ids: winners });
+}
+async function roomPreview(code: string, env: Env) {
+  const room = await env.DB.prepare('SELECT code,name,icon,status,ends_at FROM rooms WHERE code=?').bind(code).first();
+  if (!room) throw new HttpError('Room not found.', 404);
+  return json({ room });
+}
+async function removeMember(request: Request, userId: string, env: Env, code: string) {
+  const input = await body(request);
+  const memberId = stringField(input.userId, 64, 'Member');
+  const room = await env.DB.prepare('SELECT id,host_id FROM rooms WHERE code=?').bind(code).first<{id:string;host_id:string}>();
+  if (!room) throw new HttpError('Room not found.', 404);
+  if (room.host_id !== userId) throw new HttpError('Only the room host can remove members.', 403);
+  if (memberId === room.host_id) throw new HttpError('The host can’t remove themselves.', 400);
+  await env.DB.prepare('INSERT OR IGNORE INTO room_bans(room_id,user_id,created_at) VALUES(?,?,?)').bind(room.id, memberId, Date.now()).run();
+  await env.DB.prepare('DELETE FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, memberId).run();
+  return json({ok:true});
+}
+async function submitFeedback(request: Request, userId: string, env: Env) {
+  const input = await body(request);
+  if (!['good','bad'].includes(String(input.rating))) throw new HttpError('Choose positive or negative feedback.');
+  const note = typeof input.note === 'string' ? input.note.trim() : '';
+  if (note.length > 500) throw new HttpError('Feedback can be up to 500 characters.');
+  await env.DB.prepare('INSERT INTO feedback(id,user_id,rating,note,created_at) VALUES(?,?,?,?,?)').bind(randomId(),userId,input.rating,note,Date.now()).run();
+  return json({ok:true},201);
+}
+async function uploadRoomIcon(request: Request, userId: string, env: Env, code: string) {
+  const room = await env.DB.prepare('SELECT id,host_id,icon FROM rooms WHERE code=?').bind(code).first<{id:string;host_id:string;icon:string}>();
+  if (!room) throw new HttpError('Room not found.',404);
+  if (room.host_id !== userId) throw new HttpError('Only the room host can change its image.',403);
+  const size = Number(request.headers.get('content-length') || 0), type = request.headers.get('content-type') || '';
+  if (size > 262144) throw new HttpError('Choose an image smaller than 256 KB.',413);
+  if (!['image/jpeg','image/png','image/webp'].includes(type)) throw new HttpError('Use a JPG, PNG, or WebP image.',415);
+  const reader = request.body?.getReader();
+  if (!reader) throw new HttpError('Choose an image file.',400);
+  const chunks: Uint8Array[] = []; let total = 0;
+  while (true) {
+    const part = await reader.read();
+    if (part.done) break;
+    total += part.value.byteLength;
+    if (total > 262144) { await reader.cancel(); throw new HttpError('Choose an image smaller than 256 KB.',413); }
+    chunks.push(part.value);
+  }
+  if (!total) throw new HttpError('Choose an image file.',400);
+  const bytes = new Uint8Array(total); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk,offset); offset += chunk.byteLength; }
+  const valid = type === 'image/jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 : type === 'image/png' ? bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 : bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
+  if (!valid) throw new HttpError('That file doesn’t look like a supported image.',415);
+  const key = randomId();
+  await env.ICONS.put(key,bytes,{httpMetadata:{contentType:type}});
+  await env.DB.prepare('UPDATE rooms SET icon=? WHERE id=?').bind(`/room-icons/${key}`,room.id).run();
+  if (room.icon?.startsWith('/room-icons/')) await env.ICONS.delete(room.icon.slice('/room-icons/'.length));
+  return json({icon:`/room-icons/${key}`});
 }
 async function addIdea(request: Request, userId: string, env: Env, code: string) {
   const room = await env.DB.prepare('SELECT id,status,ends_at FROM rooms WHERE code=?').bind(code).first<{ id: string; status: string; ends_at: number }>();
@@ -223,12 +279,18 @@ async function apiRoute(request: Request, env: Env) {
   if (path === '/api/rooms' && method === 'GET') return listRooms(user.id, env);
   if (path === '/api/rooms' && method === 'POST') return createRoom(request, user.id, env);
   if (path === '/api/rooms/join' && method === 'POST') return joinRoom(request, user.id, env);
-  const match = path.match(/^\/api\/rooms\/([^/]+)(?:\/(ideas|close))?$/);
+  if (path === '/api/feedback' && method === 'POST') return submitFeedback(request,user.id,env);
+  const iconUpload = path.match(/^\/api\/rooms\/([^/]+)\/icon$/);
+  if (iconUpload && method === 'POST') return uploadRoomIcon(request,user.id,env,decodeURIComponent(iconUpload[1]).toUpperCase());
+  const preview = path.match(/^\/api\/rooms\/([^/]+)\/preview$/);
+  if (preview && method === 'GET') return roomPreview(decodeURIComponent(preview[1]).toUpperCase(),env);
+  const match = path.match(/^\/api\/rooms\/([^/]+)(?:\/(ideas|close|members))?$/);
   if (match) {
     const code = decodeURIComponent(match[1]).toUpperCase();
     if (!match[2] && method === 'GET') return roomSnapshot(code, user.id, env);
     if (match[2] === 'ideas' && method === 'POST') return addIdea(request, user.id, env, code);
     if (match[2] === 'close' && method === 'POST') return closeRoom(user.id, env, code);
+    if (match[2] === 'members' && method === 'DELETE') return removeMember(request,user.id,env,code);
   }
   const voteMatch = path.match(/^\/api\/ideas\/([^/]+)\/vote$/);
   if (voteMatch && method === 'PUT') return castVote(request, user.id, env, voteMatch[1]);
@@ -252,6 +314,8 @@ function staticAsset(path: string) {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
+      const iconPath = new URL(request.url).pathname.match(/^\/room-icons\/([a-f0-9-]{36})$/);
+      if (iconPath && request.method === 'GET') { const object = await env.ICONS.get(iconPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
       if (new URL(request.url).pathname.startsWith('/api/')) return await apiRoute(request, env);
       return staticAsset(new URL(request.url).pathname);
     } catch (error) {
