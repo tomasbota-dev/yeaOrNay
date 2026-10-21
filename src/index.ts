@@ -80,7 +80,11 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
   const email = stringField(input.email, 254, 'Email').toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError('Enter a valid email address.');
   if (typeof input.password !== 'string' || input.password.length < 10 || input.password.length > 128) throw new HttpError('Password must be 10 to 128 characters long.');
-  if (action === 'signup' && input.ageConfirmed !== true) throw new HttpError('You must be 18 or older to create an account.', 403);
+  if (action === 'signup') {
+    const existing = await env.DB.prepare('SELECT 1 FROM users WHERE email=?').bind(email).first();
+    if (existing) throw new HttpError('An account with that email already exists. Try logging in.', 409);
+    if (input.ageConfirmed !== true) throw new HttpError('Please confirm that you are 18 or older to create an account.', 403);
+  }
   let user: UserRow | null;
   if (action === 'signup') {
     const name = stringField(input.name, 40, 'Name');
