@@ -5,7 +5,7 @@ interface Env {
   ICONS: R2Bucket;
 }
 
-type UserRow = { id: string; email: string; display_name: string; password_hash: string; password_salt: string };
+type UserRow = { id: string; email: string; display_name: string; password_hash: string; password_salt: string; avatar_url?: string | null };
 const SESSION_DAYS = 30;
 // Workers Web Crypto limits PBKDF2 to 100,000 iterations.
 const HASH_ITERATIONS = 100_000;
@@ -39,9 +39,9 @@ async function currentUser(request: Request, env: Env) {
   const session = cookie(request, 'yn_session');
   if (!session) return null;
   const tokenHash = await sha256(session);
-  const row = await env.DB.prepare('SELECT u.id, u.email, u.display_name, u.last_seen_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id_hash=? AND s.expires_at>?').bind(tokenHash, Date.now()).first<{ id: string; email: string; display_name: string; last_seen_at: number }>();
+  const row = await env.DB.prepare('SELECT u.id, u.email, u.display_name, u.avatar_url, u.last_seen_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id_hash=? AND s.expires_at>?').bind(tokenHash, Date.now()).first<{ id: string; email: string; display_name: string; avatar_url: string | null; last_seen_at: number }>();
   if (row && Date.now() - row.last_seen_at > 24 * 60 * 60_000) await env.DB.prepare('UPDATE users SET last_seen_at=? WHERE id=?').bind(Date.now(), row.id).run();
-  return row ? { id: row.id, email: row.email, name: row.display_name } : null;
+  return row ? { id: row.id, email: row.email, name: row.display_name, avatarUrl: row.avatar_url } : null;
 }
 async function body(request: Request) {
   const size = Number(request.headers.get('content-length') || 0);
@@ -97,7 +97,7 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
       if (String(error).includes('UNIQUE')) throw new HttpError('An account with that email already exists. Try logging in.', 409);
       throw error;
     }
-    user = { id, email, display_name: name, password_hash: hash, password_salt: salt };
+    user = { id, email, display_name: name, password_hash: hash, password_salt: salt, avatar_url: null };
   } else {
     const address = request.headers.get('CF-Connecting-IP') || 'unknown';
     const key = await sha256(`${address}|${email}`);
@@ -106,7 +106,7 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
     if (attempt && now - attempt.window_start < 15 * 60_000 && attempt.count >= 12) throw new HttpError('Too many tries. Please wait 15 minutes and try again.', 429);
     if (!attempt || now - attempt.window_start >= 15 * 60_000) await env.DB.prepare('INSERT INTO auth_attempts(ip_hash,count,window_start) VALUES(?,1,?) ON CONFLICT(ip_hash) DO UPDATE SET count=1, window_start=excluded.window_start').bind(key, now).run();
     else await env.DB.prepare('UPDATE auth_attempts SET count=count+1 WHERE ip_hash=?').bind(key).run();
-    user = await env.DB.prepare('SELECT id,email,display_name,password_hash,password_salt FROM users WHERE email=?').bind(email).first<UserRow>();
+    user = await env.DB.prepare('SELECT id,email,display_name,password_hash,password_salt,avatar_url FROM users WHERE email=?').bind(email).first<UserRow>();
     const salt = user?.password_salt || '00000000000000000000000000000000';
     const expected = user?.password_hash || '0'.repeat(64);
     const actual = await derivePassword(input.password, salt);
@@ -115,7 +115,7 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
   await env.DB.prepare('UPDATE users SET last_seen_at=? WHERE id=?').bind(Date.now(), user.id).run();
   const token = await createSession(user.id, env);
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Date.now()).run();
-  return json({ user: { id: user.id, email: user.email, name: user.display_name } }, 200, { 'set-cookie': sessionCookie(token, SESSION_DAYS * 24 * 60 * 60) });
+  return json({ user: { id: user.id, email: user.email, name: user.display_name, avatarUrl: user.avatar_url || null } }, 200, { 'set-cookie': sessionCookie(token, SESSION_DAYS * 24 * 60 * 60) });
 }
 async function listRooms(userId: string, env: Env) {
   await env.DB.prepare("UPDATE rooms SET status='closed' WHERE status='open' AND ends_at<=?").bind(Date.now()).run();
@@ -163,7 +163,7 @@ async function roomSnapshot(code: string, userId: string, env: Env) {
   const room = await env.DB.prepare(`SELECT r.id,r.code,r.name,r.icon,r.host_id,r.created_at,r.ends_at,r.status,u.display_name host_name
     FROM rooms r JOIN users u ON u.id=r.host_id WHERE r.id=?`).bind(found.id).first<Record<string, any>>();
   const [members, ideas, comments] = await Promise.all([
-    env.DB.prepare('SELECT u.id,u.display_name name,rm.joined_at FROM room_members rm JOIN users u ON u.id=rm.user_id WHERE rm.room_id=? ORDER BY rm.joined_at').bind(found.id).all(),
+    env.DB.prepare('SELECT u.id,u.display_name name,u.avatar_url avatarUrl,rm.joined_at FROM room_members rm JOIN users u ON u.id=rm.user_id WHERE rm.room_id=? ORDER BY rm.joined_at').bind(found.id).all(),
     env.DB.prepare(`SELECT i.id,i.title,i.details,i.author_id,i.created_at,u.display_name author_name,
       COALESCE(SUM(v.value),0) score, COALESCE(MAX(CASE WHEN v.user_id=? THEN v.value END),0) my_vote
       FROM ideas i JOIN users u ON u.id=i.author_id LEFT JOIN votes v ON v.idea_id=i.id
@@ -173,7 +173,7 @@ async function roomSnapshot(code: string, userId: string, env: Env) {
   const ideaRows = ideas.results as Array<Record<string, any>>;
   const max = ideaRows.length ? Math.max(...ideaRows.map(i => Number(i.score))) : null;
   const winners = room?.status === 'closed' && max !== null ? ideaRows.filter(i => Number(i.score) === max).map(i => i.id) : [];
-  return json({ ...room, is_host: room?.host_id === userId, members: members.results.map((m: any) => ({ id: m.id, name: m.name, joined_at: m.joined_at })), ideas: ideaRows.map(i => ({ ...i, score: Number(i.score), my_vote: Number(i.my_vote), winner: winners.includes(i.id) })), comments: comments.results, winner_ids: winners });
+  return json({ ...room, is_host: room?.host_id === userId, members: members.results.map((m: any) => ({ id: m.id, name: m.name, avatarUrl: m.avatarUrl, joined_at: m.joined_at })), ideas: ideaRows.map(i => ({ ...i, score: Number(i.score), my_vote: Number(i.my_vote), winner: winners.includes(i.id) })), comments: comments.results, winner_ids: winners });
 }
 async function roomPreview(code: string, env: Env) {
   const room = await env.DB.prepare('SELECT code,name,icon,status,ends_at FROM rooms WHERE code=?').bind(code).first();
@@ -218,6 +218,8 @@ async function submitFeedback(request: Request, userId: string, env: Env) {
   return json({ok:true},201);
 }
 async function removeAccount(userId: string, env: Env) {
+  const user = await env.DB.prepare('SELECT avatar_url FROM users WHERE id=?').bind(userId).first<{avatar_url:string|null}>();
+  if (user?.avatar_url?.startsWith('/profile-photos/')) await env.ICONS.delete(user.avatar_url.slice('/profile-photos/'.length));
   const hosted = await env.DB.prepare('SELECT id,icon FROM rooms WHERE host_id=?').bind(userId).all<{id:string;icon:string}>();
   for (const room of hosted.results) {
     const nextHost = await env.DB.prepare('SELECT user_id FROM room_members WHERE room_id=? AND user_id<>? ORDER BY joined_at LIMIT 1').bind(room.id,userId).first<{user_id:string}>();
@@ -277,6 +279,44 @@ async function uploadRoomIcon(request: Request, userId: string, env: Env, code: 
   if (room.icon?.startsWith('/room-icons/')) await env.ICONS.delete(room.icon.slice('/room-icons/'.length));
   return json({icon:`/room-icons/${key}`});
 }
+async function updateProfile(request: Request, userId: string, env: Env) {
+  const input = await body(request);
+  const name = stringField(input.name, 40, 'Name');
+  const email = stringField(input.email, 254, 'Email').toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError('Enter a valid email address.');
+  try {
+    await env.DB.prepare('UPDATE users SET display_name=?,email=? WHERE id=?').bind(name,email,userId).run();
+  } catch (error) {
+    if (String(error).includes('UNIQUE')) throw new HttpError('An account with that email already exists.',409);
+    throw error;
+  }
+  return json({user: await env.DB.prepare('SELECT id,email,display_name name,avatar_url avatarUrl FROM users WHERE id=?').bind(userId).first()});
+}
+async function uploadProfilePhoto(request: Request, userId: string, env: Env) {
+  const size = Number(request.headers.get('content-length') || 0), type = request.headers.get('content-type') || '';
+  if (size > 262144) throw new HttpError('Choose an image smaller than 256 KB.',413);
+  if (!['image/jpeg','image/png','image/webp'].includes(type)) throw new HttpError('Use a JPG, PNG, or WebP image.',415);
+  const reader = request.body?.getReader();
+  if (!reader) throw new HttpError('Choose an image file.',400);
+  const chunks: Uint8Array[] = []; let total = 0;
+  while (true) { const part = await reader.read(); if (part.done) break; total += part.value.byteLength; if (total > 262144) { await reader.cancel(); throw new HttpError('Choose an image smaller than 256 KB.',413); } chunks.push(part.value); }
+  if (!total) throw new HttpError('Choose an image file.',400);
+  const bytes = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { bytes.set(chunk,offset); offset += chunk.byteLength; }
+  const valid = type === 'image/jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 : type === 'image/png' ? bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 : bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
+  if (!valid) throw new HttpError('That file doesn’t look like a supported image.',415);
+  const existing = await env.DB.prepare('SELECT avatar_url FROM users WHERE id=?').bind(userId).first<{avatar_url:string|null}>();
+  const key = randomId(); await env.ICONS.put(key,bytes,{httpMetadata:{contentType:type}});
+  const avatarUrl = `/profile-photos/${key}`;
+  await env.DB.prepare('UPDATE users SET avatar_url=? WHERE id=?').bind(avatarUrl,userId).run();
+  if (existing?.avatar_url?.startsWith('/profile-photos/')) await env.ICONS.delete(existing.avatar_url.slice('/profile-photos/'.length));
+  return json({avatarUrl});
+}
+async function removeProfilePhoto(userId: string, env: Env) {
+  const existing = await env.DB.prepare('SELECT avatar_url FROM users WHERE id=?').bind(userId).first<{avatar_url:string|null}>();
+  await env.DB.prepare('UPDATE users SET avatar_url=NULL WHERE id=?').bind(userId).run();
+  if (existing?.avatar_url?.startsWith('/profile-photos/')) await env.ICONS.delete(existing.avatar_url.slice('/profile-photos/'.length));
+  return json({avatarUrl:null});
+}
 async function addIdea(request: Request, userId: string, env: Env, code: string) {
   const room = await env.DB.prepare('SELECT id,status,ends_at FROM rooms WHERE code=?').bind(code).first<{ id: string; status: string; ends_at: number }>();
   if (!room) throw new HttpError('Room not found.', 404);
@@ -329,6 +369,9 @@ async function apiRoute(request: Request, env: Env) {
   const user = await currentUser(request, env);
   if (!user) return fail('Please log in to continue.', 401);
   if (path === '/api/me' && method === 'GET') return json({ user });
+  if (path === '/api/profile' && method === 'PUT') return updateProfile(request,user.id,env);
+  if (path === '/api/profile/photo' && method === 'POST') return uploadProfilePhoto(request,user.id,env);
+  if (path === '/api/profile/photo' && method === 'DELETE') return removeProfilePhoto(user.id,env);
   if (path === '/api/account' && method === 'DELETE') {
     await removeAccount(user.id,env);
     return json({ok:true},200,{'set-cookie':sessionCookie('',0)});
@@ -384,6 +427,8 @@ export default {
     try {
       const iconPath = new URL(request.url).pathname.match(/^\/room-icons\/([a-f0-9-]{36})$/);
       if (iconPath && request.method === 'GET') { const object = await env.ICONS.get(iconPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
+      const profilePhotoPath = new URL(request.url).pathname.match(/^\/profile-photos\/([a-f0-9-]{36})$/);
+      if (profilePhotoPath && request.method === 'GET') { const object = await env.ICONS.get(profilePhotoPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
       if (new URL(request.url).pathname.startsWith('/api/')) return await apiRoute(request, env);
       return staticAsset(new URL(request.url).pathname);
     } catch (error) {
