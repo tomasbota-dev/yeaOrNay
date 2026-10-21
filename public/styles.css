@@ -51,3 +51,5 @@
 .member-actions{display:flex;align-items:center;gap:5px;margin-left:auto}.member-actions button{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:7px;padding:4px 7px;font-size:10px;font-weight:800}.member-actions .ban-member{color:#b33f34}.btn-danger{background:#b33f34;color:#fff;box-shadow:0 7px 14px #b33f3438}.btn-danger:hover{background:#982d24}
 
 .member-row>span:nth-child(2){flex:1 1 auto;min-width:0;overflow-wrap:anywhere}.member-actions{flex:0 0 auto}.member-actions button{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:28px;padding:5px 8px;white-space:nowrap;background:var(--paper)}
+
+.member-row .member-actions .kick-member{margin:0;width:auto;height:auto;min-width:44px;min-height:28px;padding:5px 8px;font-size:10px;line-height:1.2;white-space:nowrap}
