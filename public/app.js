@@ -88,7 +88,7 @@ function homeView() {
 }
 function roomView() {
   const room = state.room;
-  if (!room) return `${topbar()}<main class="page"><div class="skeleton"></div></main>`;
+  if (!room) return `${topbar()}<main class="page"><div class="room-loading" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><span>Opening your room…</span></div></main>`;
   if (room.notMember) return `${topbar()}<main class="page"><button class="btn btn-ghost" data-action="home">← Your rooms</button><div class="empty" style="margin-top:22px"><div class="empty-art">${room.icon?.startsWith('/room-icons/') ? `<img src="${esc(room.icon)}" alt="">` : esc(room.icon || '👋')}</div><h2>You’ve got an invite!</h2><p>${esc(room.name)} is ready for you. Join the room to add ideas and cast your vote.</p><button class="btn btn-primary" data-action="join-room" data-code="${esc(room.code)}">Join this room →</button></div></main>${footer()}`;
   const canVote = room.status === 'open';
   const timeLeft = Math.max(0, Math.ceil((room.ends_at - Date.now()) / 1000));

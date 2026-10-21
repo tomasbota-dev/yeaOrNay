@@ -44,3 +44,4 @@
 
 .age-confirm label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}.age-confirm input{width:16px;height:16px;accent-color:var(--purple)}
 .room-card-foot{background:transparent!important}.room-card-foot .room-code{background:transparent!important;padding-left:0}.brand-icon svg{width:22px;height:22px;fill:none}
+.room-loading{min-height:300px;display:flex;align-items:center;justify-content:center;gap:12px;color:var(--muted);font-size:14px;font-weight:700}.room-loading .spinner{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--purple)}
