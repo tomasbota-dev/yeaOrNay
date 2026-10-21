@@ -44,7 +44,8 @@
 
 .age-confirm label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}.age-confirm input{width:16px;height:16px;accent-color:var(--purple)}
 .room-card-foot{background:transparent!important}.room-card-foot .room-code{background:transparent!important;padding-left:0}.brand-icon svg{width:22px;height:22px;fill:none}
-.room-loading{min-height:300px;display:flex;align-items:center;justify-content:center;gap:12px;color:var(--muted);font-size:14px;font-weight:700}
+.room-loading{position:fixed;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;background:var(--paper)}
+.boot-mark{position:fixed;inset:0;top:0;left:0;transform:none;display:grid;place-items:center}
 .loading-logo{display:inline-flex;align-items:flex-start;gap:1px;color:var(--purple);font:800 25px/1 Manrope,ui-sans-serif,system-ui,sans-serif;letter-spacing:-1.5px;animation:loadingPulse 900ms ease-in-out infinite alternate}.loading-logo>span{color:var(--sun);font-size:.62em;line-height:1}.boot-mark .loading-logo{color:var(--purple);font-size:30px}.room-loading .loading-logo{font-size:28px}.btn .loading-logo{color:#fff;font-size:13px;letter-spacing:-.6px}.btn .loading-logo>span{color:var(--sun)}@keyframes loadingPulse{to{opacity:.45;transform:scale(.92)}}
 .spinner{display:none}.legal{max-width:1030px}
 

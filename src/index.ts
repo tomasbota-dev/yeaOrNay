@@ -193,6 +193,14 @@ async function moderateMember(request: Request, userId: string, env: Env, code: 
   await env.DB.prepare('DELETE FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, memberId).run();
   return json({ok:true});
 }
+async function leaveRoom(userId: string, env: Env, code: string) {
+  const room = await env.DB.prepare('SELECT id,host_id FROM rooms WHERE code=?').bind(code).first<{id:string;host_id:string}>();
+  if (!room) throw new HttpError('Room not found.', 404);
+  if (room.host_id === userId) throw new HttpError('The room host cannot leave. Delete the room or transfer it first.', 400);
+  const result = await env.DB.prepare('DELETE FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, userId).run();
+  if (!result.meta.changes) throw new HttpError('You are not a member of this room.', 404);
+  return json({ok:true});
+}
 async function deleteRoom(userId: string, env: Env, code: string) {
   const room = await env.DB.prepare('SELECT id,icon,host_id FROM rooms WHERE code=?').bind(code).first<{id:string;icon:string;host_id:string}>();
   if (!room) throw new HttpError('Room not found.', 404);
@@ -339,6 +347,8 @@ async function apiRoute(request: Request, env: Env) {
   if (preview && method === 'GET') return roomPreview(decodeURIComponent(preview[1]).toUpperCase(),env);
   const memberAction = path.match(/^\/api\/rooms\/([^/]+)\/members\/(kick|ban)$/);
   if (memberAction && method === 'POST') return moderateMember(request,user.id,env,decodeURIComponent(memberAction[1]).toUpperCase(),memberAction[2] as 'kick' | 'ban');
+  const leaveAction = path.match(/^\/api\/rooms\/([^/]+)\/leave$/);
+  if (leaveAction && method === 'POST') return leaveRoom(user.id,env,decodeURIComponent(leaveAction[1]).toUpperCase());
   const match = path.match(/^\/api\/rooms\/([^/]+)(?:\/(ideas|close|members))?$/);
   if (match) {
     const code = decodeURIComponent(match[1]).toUpperCase();
