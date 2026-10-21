@@ -47,3 +47,5 @@
 .room-loading{min-height:300px;display:flex;align-items:center;justify-content:center;gap:12px;color:var(--muted);font-size:14px;font-weight:700}
 .loading-logo{display:inline-flex;align-items:flex-start;gap:1px;color:var(--purple);font:800 25px/1 Manrope,ui-sans-serif,system-ui,sans-serif;letter-spacing:-1.5px;animation:loadingPulse 900ms ease-in-out infinite alternate}.loading-logo>span{color:var(--sun);font-size:.62em;line-height:1}.boot-mark .loading-logo{color:var(--purple);font-size:30px}.room-loading .loading-logo{font-size:28px}.btn .loading-logo{color:#fff;font-size:13px;letter-spacing:-.6px}.btn .loading-logo>span{color:var(--sun)}@keyframes loadingPulse{to{opacity:.45;transform:scale(.92)}}
 .spinner{display:none}.legal{max-width:1030px}
+
+.member-actions{display:flex;align-items:center;gap:5px;margin-left:auto}.member-actions button{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:7px;padding:4px 7px;font-size:10px;font-weight:800}.member-actions .ban-member{color:#b33f34}.btn-danger{background:#b33f34;color:#fff;box-shadow:0 7px 14px #b33f3438}.btn-danger:hover{background:#982d24}

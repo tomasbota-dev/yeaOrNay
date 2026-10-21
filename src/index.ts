@@ -180,15 +180,25 @@ async function roomPreview(code: string, env: Env) {
   if (!room) throw new HttpError('Room not found.', 404);
   return json({ room });
 }
-async function removeMember(request: Request, userId: string, env: Env, code: string) {
+async function moderateMember(request: Request, userId: string, env: Env, code: string, action: 'kick' | 'ban') {
   const input = await body(request);
   const memberId = stringField(input.userId, 64, 'Member');
   const room = await env.DB.prepare('SELECT id,host_id FROM rooms WHERE code=?').bind(code).first<{id:string;host_id:string}>();
   if (!room) throw new HttpError('Room not found.', 404);
-  if (room.host_id !== userId) throw new HttpError('Only the room host can remove members.', 403);
+  if (room.host_id !== userId) throw new HttpError('Only the room host can manage members.', 403);
   if (memberId === room.host_id) throw new HttpError('The host can’t remove themselves.', 400);
-  await env.DB.prepare('INSERT OR IGNORE INTO room_bans(room_id,user_id,created_at) VALUES(?,?,?)').bind(room.id, memberId, Date.now()).run();
+  const member = await env.DB.prepare('SELECT 1 FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, memberId).first();
+  if (!member) throw new HttpError('That person is no longer in this room.', 404);
+  if (action === 'ban') await env.DB.prepare('INSERT OR IGNORE INTO room_bans(room_id,user_id,created_at) VALUES(?,?,?)').bind(room.id, memberId, Date.now()).run();
   await env.DB.prepare('DELETE FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, memberId).run();
+  return json({ok:true});
+}
+async function deleteRoom(userId: string, env: Env, code: string) {
+  const room = await env.DB.prepare('SELECT id,icon,host_id FROM rooms WHERE code=?').bind(code).first<{id:string;icon:string;host_id:string}>();
+  if (!room) throw new HttpError('Room not found.', 404);
+  if (room.host_id !== userId) throw new HttpError('Only the room host can delete this room.', 403);
+  await env.DB.prepare('DELETE FROM rooms WHERE id=?').bind(room.id).run();
+  if (room.icon?.startsWith('/room-icons/')) await env.ICONS.delete(room.icon.slice('/room-icons/'.length));
   return json({ok:true});
 }
 async function submitFeedback(request: Request, userId: string, env: Env) {
@@ -327,13 +337,15 @@ async function apiRoute(request: Request, env: Env) {
   if (iconUpload && method === 'POST') return uploadRoomIcon(request,user.id,env,decodeURIComponent(iconUpload[1]).toUpperCase());
   const preview = path.match(/^\/api\/rooms\/([^/]+)\/preview$/);
   if (preview && method === 'GET') return roomPreview(decodeURIComponent(preview[1]).toUpperCase(),env);
+  const memberAction = path.match(/^\/api\/rooms\/([^/]+)\/members\/(kick|ban)$/);
+  if (memberAction && method === 'POST') return moderateMember(request,user.id,env,decodeURIComponent(memberAction[1]).toUpperCase(),memberAction[2] as 'kick' | 'ban');
   const match = path.match(/^\/api\/rooms\/([^/]+)(?:\/(ideas|close|members))?$/);
   if (match) {
     const code = decodeURIComponent(match[1]).toUpperCase();
     if (!match[2] && method === 'GET') return roomSnapshot(code, user.id, env);
+    if (!match[2] && method === 'DELETE') return deleteRoom(user.id,env,code);
     if (match[2] === 'ideas' && method === 'POST') return addIdea(request, user.id, env, code);
     if (match[2] === 'close' && method === 'POST') return closeRoom(user.id, env, code);
-    if (match[2] === 'members' && method === 'DELETE') return removeMember(request,user.id,env,code);
   }
   const voteMatch = path.match(/^\/api\/ideas\/([^/]+)\/vote$/);
   if (voteMatch && method === 'PUT') return castVote(request, user.id, env, voteMatch[1]);
