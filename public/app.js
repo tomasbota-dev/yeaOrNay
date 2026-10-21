@@ -34,7 +34,7 @@ Object.assign(messages['pt-PT'], {
   'Room name is required.':'Indica o que o grupo vai decidir.',
   'Choose one of the available time limits.':'Escolhe um dos limites de tempo disponíveis.',
   'Good plans, made together':'Bons planos, feitos em conjunto', 'DECIDING':'A DECIDIR', 'DECIDED':'DECIDIDO',
-  'Jump in ↗':'Entrar ↗', 'See the result ↗':'Ver resultado ↗', 'Opening your room…':'A abrir a sala…',
+  'Jump in ↗':'Entrar ↗', 'See the result ↗':'Ver resultado ↗',
   '← Your rooms':'← As tuas salas', 'Join this room →':'Entrar nesta sala →',
   'Room':'Sala', 'Created':'Criada', 'Made by':'Criada por', '(you)':'(tu)',
   'Delete room':'Eliminar sala', 'End voting':'Terminar votação', 'Time left to decide':'Tempo restante para decidir',
