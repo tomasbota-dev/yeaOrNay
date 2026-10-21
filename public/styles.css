@@ -41,3 +41,5 @@
 :root[data-theme="dark"] .room-card-foot .room-code{background:#302b39;color:#c2bbcf}:root[data-theme="dark"] .account-dropdown{background:#211e29;border-color:#3e3948}:root[data-theme="dark"] .account-dropdown button{color:#f2eff8}:root[data-theme="dark"] .account-dropdown button:hover{background:#302b39}:root[data-theme="dark"] .icon-picker label span{background:#302b39}:root[data-theme="dark"] .feedback-ratings span{background:#211e29;color:#f2eff8}:root[data-theme="dark"] .legal-draft{background:#3b321e;border-color:#66552c;color:#f3dda0}
 :root[data-theme="dark"] .timer-bar{background:#302b39;color:var(--ink)}
 :root[data-theme="dark"] .timer-bar.timer-closed{background:#362a64;color:#fff}
+
+.age-confirm label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}.age-confirm input{width:16px;height:16px;accent-color:var(--purple)}

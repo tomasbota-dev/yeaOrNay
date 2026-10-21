@@ -39,7 +39,8 @@ async function currentUser(request: Request, env: Env) {
   const session = cookie(request, 'yn_session');
   if (!session) return null;
   const tokenHash = await sha256(session);
-  const row = await env.DB.prepare('SELECT u.id, u.email, u.display_name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id_hash=? AND s.expires_at>?').bind(tokenHash, Date.now()).first<{ id: string; email: string; display_name: string }>();
+  const row = await env.DB.prepare('SELECT u.id, u.email, u.display_name, u.last_seen_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id_hash=? AND s.expires_at>?').bind(tokenHash, Date.now()).first<{ id: string; email: string; display_name: string; last_seen_at: number }>();
+  if (row && Date.now() - row.last_seen_at > 24 * 60 * 60_000) await env.DB.prepare('UPDATE users SET last_seen_at=? WHERE id=?').bind(Date.now(), row.id).run();
   return row ? { id: row.id, email: row.email, name: row.display_name } : null;
 }
 async function body(request: Request) {
@@ -79,6 +80,7 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
   const email = stringField(input.email, 254, 'Email').toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError('Enter a valid email address.');
   if (typeof input.password !== 'string' || input.password.length < 10 || input.password.length > 128) throw new HttpError('Password must be 10 to 128 characters long.');
+  if (action === 'signup' && input.ageConfirmed !== true) throw new HttpError('You must be 18 or older to create an account.', 403);
   let user: UserRow | null;
   if (action === 'signup') {
     const name = stringField(input.name, 40, 'Name');
@@ -106,6 +108,7 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
     const actual = await derivePassword(input.password, salt);
     if (!user || !constantTimeEqual(actual, expected)) throw new HttpError('Email or password didn’t match. Try again.', 401);
   }
+  await env.DB.prepare('UPDATE users SET last_seen_at=? WHERE id=?').bind(Date.now(), user.id).run();
   const token = await createSession(user.id, env);
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Date.now()).run();
   return json({ user: { id: user.id, email: user.email, name: user.display_name } }, 200, { 'set-cookie': sessionCookie(token, SESSION_DAYS * 24 * 60 * 60) });
@@ -192,6 +195,38 @@ async function submitFeedback(request: Request, userId: string, env: Env) {
   await env.DB.prepare('INSERT INTO feedback(id,user_id,rating,note,created_at) VALUES(?,?,?,?,?)').bind(randomId(),userId,input.rating,note,Date.now()).run();
   return json({ok:true},201);
 }
+async function removeAccount(userId: string, env: Env) {
+  const hosted = await env.DB.prepare('SELECT id,icon FROM rooms WHERE host_id=?').bind(userId).all<{id:string;icon:string}>();
+  for (const room of hosted.results) {
+    const nextHost = await env.DB.prepare('SELECT user_id FROM room_members WHERE room_id=? AND user_id<>? ORDER BY joined_at LIMIT 1').bind(room.id,userId).first<{user_id:string}>();
+    if (nextHost) await env.DB.prepare('UPDATE rooms SET host_id=? WHERE id=?').bind(nextHost.user_id,room.id).run();
+    else {
+      if (room.icon?.startsWith('/room-icons/')) await env.ICONS.delete(room.icon.slice('/room-icons/'.length));
+      await env.DB.prepare('DELETE FROM rooms WHERE id=?').bind(room.id).run();
+    }
+  }
+  await env.DB.prepare('DELETE FROM comments WHERE user_id=?').bind(userId).run();
+  await env.DB.prepare('DELETE FROM ideas WHERE author_id=?').bind(userId).run();
+  await env.DB.prepare('DELETE FROM votes WHERE user_id=?').bind(userId).run();
+  await env.DB.prepare('DELETE FROM room_members WHERE user_id=?').bind(userId).run();
+  await env.DB.prepare('DELETE FROM room_bans WHERE user_id=?').bind(userId).run();
+  await env.DB.prepare('DELETE FROM feedback WHERE user_id=?').bind(userId).run();
+  await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(userId).run();
+  await env.DB.prepare('DELETE FROM users WHERE id=?').bind(userId).run();
+}
+async function purgeExpiredData(env: Env) {
+  const now = Date.now(), year = 365 * 24 * 60 * 60_000, cutoff = now - year;
+  await env.DB.prepare("UPDATE rooms SET status='closed' WHERE status='open' AND ends_at<=?").bind(now).run();
+  const expiredRooms = await env.DB.prepare("SELECT id,icon FROM rooms WHERE status='closed' AND ends_at<? LIMIT 100").bind(cutoff).all<{id:string;icon:string}>();
+  for (const room of expiredRooms.results) if (room.icon?.startsWith('/room-icons/')) await env.ICONS.delete(room.icon.slice('/room-icons/'.length));
+  for (const room of expiredRooms.results) await env.DB.prepare('DELETE FROM rooms WHERE id=?').bind(room.id).run();
+  await env.DB.prepare('DELETE FROM feedback WHERE created_at<?').bind(cutoff).run();
+  await env.DB.prepare('DELETE FROM sessions WHERE expires_at<?').bind(now).run();
+  await env.DB.prepare('DELETE FROM auth_attempts WHERE window_start<?').bind(now - 24 * 60 * 60_000).run();
+  const inactive = await env.DB.prepare('SELECT id FROM users WHERE last_seen_at<? LIMIT 20').bind(cutoff).all<{id:string}>();
+  for (const user of inactive.results) await removeAccount(user.id,env);
+  console.log('Retention cleanup completed', { rooms: expiredRooms.results.length, inactiveAccounts: inactive.results.length });
+}
 async function uploadRoomIcon(request: Request, userId: string, env: Env, code: string) {
   const room = await env.DB.prepare('SELECT id,host_id,icon FROM rooms WHERE code=?').bind(code).first<{id:string;host_id:string;icon:string}>();
   if (!room) throw new HttpError('Room not found.',404);
@@ -272,6 +307,10 @@ async function apiRoute(request: Request, env: Env) {
   const user = await currentUser(request, env);
   if (!user) return fail('Please log in to continue.', 401);
   if (path === '/api/me' && method === 'GET') return json({ user });
+  if (path === '/api/account' && method === 'DELETE') {
+    await removeAccount(user.id,env);
+    return json({ok:true},200,{'set-cookie':sessionCookie('',0)});
+  }
   if (path === '/api/auth/logout' && method === 'POST') {
     const session = cookie(request, 'yn_session'); if (session) await env.DB.prepare('DELETE FROM sessions WHERE id_hash=?').bind(await sha256(session)).run();
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
@@ -312,6 +351,9 @@ function staticAsset(path: string) {
   return secureAssetResponse(new Response(asset.body, { headers: { 'content-type': asset.type, 'cache-control': cache } }));
 }
 export default {
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    await purgeExpiredData(env);
+  },
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const iconPath = new URL(request.url).pathname.match(/^\/room-icons\/([a-f0-9-]{36})$/);

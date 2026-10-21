@@ -13,5 +13,6 @@
     }
   ],
   "r2_buckets": [{ "binding": "ICONS", "bucket_name": "yea-or-nay-room-icons" }],
+  "triggers": { "crons": ["0 3 * * *"] },
   "observability": { "enabled": true }
 }
