@@ -5,6 +5,7 @@ const files = [
   ['/', 'index.html', 'text/html; charset=utf-8'],
   ['/styles.css', 'styles.css', 'text/css; charset=utf-8'],
   ['/app.js', 'app.js', 'text/javascript; charset=utf-8'],
+  ['/legal.js', 'legal.js', 'text/javascript; charset=utf-8'],
   ['/privacy.html', 'privacy.html', 'text/html; charset=utf-8'],
   ['/terms.html', 'terms.html', 'text/html; charset=utf-8'],
   ['/manifest.webmanifest', 'manifest.webmanifest', 'application/manifest+json; charset=utf-8'],
