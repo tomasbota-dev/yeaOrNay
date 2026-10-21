@@ -35,13 +35,14 @@ Open the URL printed by Wrangler (usually `http://localhost:8787`). Local data l
 
 ## Cloudflare deployment
 
-The D1 database `yea-or-nay-db` is provisioned in Cloudflare. `wrangler.jsonc` contains its ID and the Worker config. Sign in to Wrangler if needed, then:
+The GitHub Actions workflow provisions the D1 database and R2 bucket when missing, applies pending D1 migrations, and deploys the Worker (including its scheduled trigger) on pushes to `main`. It can also be started from the repository's Actions tab.
 
-```sh
-npx wrangler login
-npm run db:remote
-npm run deploy
-```
+Configure these GitHub repository settings once:
+
+- Repository variable `CLOUDFLARE_ACCOUNT_ID` with the Cloudflare account ID (already configured for this repository).
+- Repository secret `CLOUDFLARE_API_TOKEN` with an account-scoped Cloudflare API token. Grant D1 Read and Write, Workers R2 Storage Read and Write, and Workers Scripts Edit.
+
+For example, after creating the token, run `gh secret set CLOUDFLARE_API_TOKEN --repo tomasbota-dev/yeaOrNay`. The account ID is currently configured in `wrangler.jsonc`; the provisioning step updates that file in the workflow checkout if it creates a new D1 database.
 
 The Worker is published on its `workers.dev` subdomain. A custom domain is optional. Review the [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [D1 pricing and limits](https://developers.cloudflare.com/d1/platform/pricing/) before a larger launch; free-plan quotas are daily caps, and requests can fail when a cap is reached.
 
