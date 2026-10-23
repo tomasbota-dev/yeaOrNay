@@ -5,5 +5,6 @@
 - Open a PR into `staging`; merging deploys the isolated staging environment.
 - Production releases use a PR from this repository's `staging` branch into `main`.
 - Keep staging after releases. Use merge commits for promotion PRs to preserve shared history.
+- Merged `feature/*` and `bugfix/*` branches are deleted by Actions. Keep repository-wide automatic branch deletion disabled so `staging` is retained after releases.
 - Cloudflare provisioning belongs in GitHub Actions: check whether resources exist and create missing resources before migrations and deployment. Keep staging and production data separate.
 - Run static asset generation, TypeScript checking, policy tests, and Wrangler dry runs for both environments when changing deployment configuration.
