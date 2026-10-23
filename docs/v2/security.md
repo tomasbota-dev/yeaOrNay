@@ -65,4 +65,4 @@ Maintain this separation through the SPA migration. Browser requests should call
 - Test the chosen image-access policy with signed-out users, room members, and nonmembers, including cache behavior after access changes or deletion.
 - Check that API routes enforce authentication and room membership independently of client-side routing. Verify session and cross-origin request behavior during the SPA migration.
 - Reconcile privacy disclosures with actual public media, retention, deletion, and operational logging behavior.
-- Follow repository policy: feature/bugfix branches from latest `origin/staging`, PR into staging, then a merge-commit promotion PR from staging into main. For deployment configuration changes, run static generation, TypeScript checks, policy tests, and Wrangler dry runs for both environments before release.
+- Follow repository policy: feature/bugfix branches from latest `origin/staging`, PR into staging, then a promotion PR from staging into main. Squash merge all PRs and retain staging. For deployment configuration changes, run static generation, TypeScript checks, policy tests, and Wrangler dry runs for both environments before release.

@@ -43,7 +43,9 @@ Profile contains name, email, photo, and deletion. The account menu contains Pro
 
 ## Branches and releases
 
-Start from current `origin/staging` on `feature/*` or `bugfix/*`. Open a PR into `staging`; required policy/application checks precede merging. Merge deploys staging. Promote through a same-repository `staging` → `main` PR using a merge commit. Never push directly to protected branches.
+Start from current `origin/staging` on `feature/*` or `bugfix/*`. Open a PR into `staging`; required policy/application checks precede merging. Squash merge deploys staging. Promote through a same-repository `staging` → `main` PR, also using a squash merge. Squash is the only enabled merge method. Never push directly to protected branches.
+
+Squashed promotions do not preserve shared commit ancestry, so earlier commits may reappear in later promotion PR histories. Review the actual file diff and validate each release. Keep staging; never reset or force-push it to align histories.
 
 Actions deletes merged feature/bugfix branches only. Keep repository-wide automatic branch deletion disabled so `staging` survives releases.
 

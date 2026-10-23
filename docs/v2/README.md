@@ -40,7 +40,7 @@ Uploaded room icons and profile photos are currently served without authenticati
 
 ## Delivery and documentation
 
-Use `feature/*` or `bugfix/*` branches from current `origin/staging`, PRs into staging, and staging-to-main promotion PRs with merge commits. Keep staging resources isolated.
+Use `feature/*` or `bugfix/*` branches from current `origin/staging`, PRs into staging, and staging-to-main promotion PRs. Squash merge every PR. Keep staging resources isolated and retain the staging branch after releases.
 
 Implementation documentation must include:
 

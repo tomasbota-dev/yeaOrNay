@@ -21,7 +21,7 @@ The landing explains idea → vote → decision without a video host. Respect re
 - Exercise auth, invite deep links, create/join, ideas/comments, vote changes/removal, own-idea restrictions, moderation and ties.
 - Exercise profile/photo/deletion, upload limits/type failures, feedback, busy/error/empty states, copy, locale/theme persistence and old legal links.
 - Inspect mobile/desktop, modal keyboard behavior, custom validation and reduced motion.
-- Confirm staging Actions and live assets before promoting staging to main through a merge-commit PR. Verify production separately.
+- Confirm staging Actions and live assets before promoting staging to main through a squash-merged PR. Use squash merges for feature/bugfix PRs too. Verify production separately.
 
 ## Rollback
 
