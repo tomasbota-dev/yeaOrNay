@@ -1,0 +1,35 @@
+name: PR checks
+on:
+  pull_request:
+    branches: [staging, main]
+    types: [opened, synchronize, reopened, edited]
+permissions:
+  contents: read
+jobs:
+  policy:
+    name: Branch policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-pr-policy.mjs
+  validate:
+    name: Validate application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:static
+      - run: npm run typecheck
+      - name: Test branch policy
+        run: env -u GITHUB_EVENT_PATH node --test scripts/*.test.mjs
+      - name: Check staging bundle
+        run: npx wrangler deploy --env staging --dry-run --outdir dist/staging
+      - name: Check production bundle
+        run: npx wrangler deploy --env="" --dry-run --outdir dist/production
