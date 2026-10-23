@@ -1,8 +1,7 @@
-import { STATIC_FILES } from './static-assets';
-
 interface Env {
   DB: D1Database;
   ICONS: R2Bucket;
+  ASSETS: Fetcher;
 }
 
 type UserRow = { id: string; email: string; display_name: string; password_hash: string; password_salt: string; avatar_url?: string | null };
@@ -14,7 +13,22 @@ const encoder = new TextEncoder();
 function json(data: unknown, status = 200, headers: HeadersInit = {}) {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 }
-function fail(message: string, status = 400) { return json({ error: message }, status); }
+const ERROR_CODES: Record<string, string> = {
+  'Email or password didn’t match. Try again.': 'INVALID_CREDENTIALS',
+  'An account with that email already exists. Try logging in.': 'EMAIL_ALREADY_EXISTS',
+  'Please log in to continue.': 'AUTH_REQUIRED',
+  'You need to join this room first.': 'ROOM_MEMBERSHIP_REQUIRED',
+  'Room not found.': 'ROOM_NOT_FOUND',
+  'Idea not found.': 'IDEA_NOT_FOUND',
+  'Voting has closed.': 'VOTING_CLOSED',
+  'Voting has closed. Take a look at the result!': 'VOTING_CLOSED',
+  'You can’t vote on your own idea.': 'OWN_IDEA_VOTE',
+  'Request origin could not be verified.': 'INVALID_ORIGIN',
+};
+function fail(message: string, status = 400) {
+  const statusCodes: Record<number, string> = { 400: 'VALIDATION_ERROR', 401: 'AUTH_REQUIRED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 409: 'CONFLICT', 413: 'PAYLOAD_TOO_LARGE', 500: 'INTERNAL_ERROR' };
+  return json({ error: message, code: ERROR_CODES[message] || statusCodes[status] || 'REQUEST_FAILED' }, status);
+}
 function randomId() { return crypto.randomUUID(); }
 function randomToken(bytes = 32) { const data = crypto.getRandomValues(new Uint8Array(bytes)); return Array.from(data, n => n.toString(16).padStart(2, '0')).join(''); }
 async function sha256(value: string) { const digest = await crypto.subtle.digest('SHA-256', encoder.encode(value)); return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join(''); }
@@ -333,14 +347,14 @@ async function addIdea(request: Request, userId: string, env: Env, code: string)
 }
 async function castVote(request: Request, userId: string, env: Env, ideaId: string) {
   const input = await body(request);
-  if (input.value !== 1 && input.value !== -1) throw new HttpError('Choose an upvote or a downvote.');
+  if (input.value !== 1 && input.value !== -1 && input.value !== 0) throw new HttpError('Choose an upvote or a downvote.');
   const idea = await env.DB.prepare('SELECT i.id,i.author_id,i.room_id,r.status,r.ends_at FROM ideas i JOIN rooms r ON r.id=i.room_id WHERE i.id=?').bind(ideaId).first<{ id: string; author_id: string; room_id: string; status: string; ends_at: number }>();
   if (!idea) throw new HttpError('Idea not found.', 404);
   await requireMember(idea.room_id, userId, env);
   if (idea.author_id === userId) throw new HttpError('You can’t vote on your own idea.', 403);
   if (idea.status !== 'open' || idea.ends_at <= Date.now()) { await env.DB.prepare("UPDATE rooms SET status='closed' WHERE id=?").bind(idea.room_id).run(); throw new HttpError('Voting has closed.', 409); }
   const previous = await env.DB.prepare('SELECT value FROM votes WHERE idea_id=? AND user_id=?').bind(ideaId, userId).first<{ value: number }>();
-  if (previous?.value === input.value) await env.DB.prepare('DELETE FROM votes WHERE idea_id=? AND user_id=?').bind(ideaId, userId).run();
+  if (input.value === 0 || previous?.value === input.value) await env.DB.prepare('DELETE FROM votes WHERE idea_id=? AND user_id=?').bind(ideaId, userId).run();
   else await env.DB.prepare('INSERT INTO votes(idea_id,user_id,value,created_at) VALUES(?,?,?,?) ON CONFLICT(idea_id,user_id) DO UPDATE SET value=excluded.value,created_at=excluded.created_at').bind(ideaId, userId, input.value, Date.now()).run();
   return json({ ok: true });
 }
@@ -411,13 +425,8 @@ function secureAssetResponse(response: Response) {
   headers.set('x-content-type-options', 'nosniff');
   headers.set('referrer-policy', 'strict-origin-when-cross-origin');
   headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
-  headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+  headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-function staticAsset(path: string) {
-  const asset = STATIC_FILES[path] || STATIC_FILES['/'];
-  const cache = path === '/' || asset.type.startsWith('text/html') ? 'no-cache' : 'public, max-age=300';
-  return secureAssetResponse(new Response(asset.body, { headers: { 'content-type': asset.type, 'cache-control': cache } }));
 }
 export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
@@ -429,8 +438,13 @@ export default {
       if (iconPath && request.method === 'GET') { const object = await env.ICONS.get(iconPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
       const profilePhotoPath = new URL(request.url).pathname.match(/^\/profile-photos\/([a-f0-9-]{36})$/);
       if (profilePhotoPath && request.method === 'GET') { const object = await env.ICONS.get(profilePhotoPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
-      if (new URL(request.url).pathname.startsWith('/api/')) return await apiRoute(request, env);
-      return staticAsset(new URL(request.url).pathname);
+      const url = new URL(request.url);
+      if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return await apiRoute(request, env);
+      if (url.pathname === '/privacy.html' || url.pathname === '/terms.html') {
+        url.pathname = url.pathname.slice(0, -5);
+        return secureAssetResponse(Response.redirect(url.toString(), 308));
+      }
+      return secureAssetResponse(await env.ASSETS.fetch(request));
     } catch (error) {
       if (error instanceof HttpError) return fail(error.message, error.status);
       console.error('Request failed', error);

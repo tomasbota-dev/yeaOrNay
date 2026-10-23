@@ -19,9 +19,7 @@
     }
   ],
   "triggers": {
-    "crons": [
-      "0 3 * * *"
-    ]
+    "crons": ["0 3 * * *"]
   },
   "observability": {
     "enabled": true
@@ -44,10 +42,34 @@
         }
       ],
       "triggers": {
-        "crons": [
-          "0 3 * * *"
-        ]
+        "crons": ["0 3 * * *"]
+      },
+      "assets": {
+        "not_found_handling": "single-page-application",
+        "run_worker_first": [
+          "/api",
+          "/api/*",
+          "/room-icons/*",
+          "/profile-photos/*",
+          "/privacy.html",
+          "/terms.html"
+        ],
+        "binding": "ASSETS",
+        "directory": "./dist/client"
       }
     }
+  },
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api",
+      "/api/*",
+      "/room-icons/*",
+      "/profile-photos/*",
+      "/privacy.html",
+      "/terms.html"
+    ],
+    "binding": "ASSETS",
+    "directory": "./dist/client"
   }
 }
