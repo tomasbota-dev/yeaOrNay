@@ -1,0 +1,43 @@
+name: Delete merged work branches
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Delete merged feature or bugfix branch
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.event.pull_request.head.ref, 'feature/') ||
+       startsWith(github.event.pull_request.head.ref, 'bugfix/'))
+    runs-on: ubuntu-latest
+    steps:
+      # Read event metadata only. Never check out or execute PR code with this token.
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const branch = pr.head.ref;
+            if (!pr.merged || pr.head.repo?.full_name !== context.repo.owner + '/' + context.repo.repo ||
+                !/^(feature|bugfix)\/.+/.test(branch)) {
+              throw new Error('Only merged feature/* and bugfix/* branches in this repository may be deleted.');
+            }
+            try {
+              const { data: ref } = await github.rest.git.getRef({
+                ...context.repo, ref: `heads/${branch}`,
+              });
+              if (ref.object.sha !== pr.head.sha) {
+                core.notice(`Keeping ${branch}: it has changed since this PR was merged.`);
+                return;
+              }
+              await github.rest.git.deleteRef({ ...context.repo, ref: `heads/${branch}` });
+              core.notice(`Deleted merged branch ${branch}.`);
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.notice(`Branch ${branch} is already deleted.`);
+            }

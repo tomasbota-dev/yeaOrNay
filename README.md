@@ -41,6 +41,8 @@ Use merge commits for release PRs to preserve shared history. Keep staging after
 
 ## Cloudflare environments
 
+Merged `feature/*` and `bugfix/*` branches in this repository are automatically deleted by the branch cleanup workflow. Closed, unmerged PRs and branches with newer commits are left alone. Other branch names, including `staging` and `main`, are never deleted by this workflow. Repository-wide automatic branch deletion stays disabled so release PRs preserve `staging`.
+
 | Resource | Production (main) | Staging (staging) |
 | --- | --- | --- |
 | Worker | yea-or-nay | yea-or-nay-staging |
