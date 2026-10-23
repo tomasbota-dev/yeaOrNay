@@ -12,7 +12,42 @@
       "migrations_dir": "./migrations"
     }
   ],
-  "r2_buckets": [{ "binding": "ICONS", "bucket_name": "yea-or-nay-room-icons" }],
-  "triggers": { "crons": ["0 3 * * *"] },
-  "observability": { "enabled": true }
+  "r2_buckets": [
+    {
+      "binding": "ICONS",
+      "bucket_name": "yea-or-nay-room-icons"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "0 3 * * *"
+    ]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "staging": {
+      "name": "yea-or-nay-staging",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "yea-or-nay-staging-db",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "./migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ICONS",
+          "bucket_name": "yea-or-nay-staging-room-icons"
+        }
+      ],
+      "triggers": {
+        "crons": [
+          "0 3 * * *"
+        ]
+      }
+    }
+  }
 }

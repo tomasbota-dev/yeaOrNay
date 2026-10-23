@@ -12,7 +12,10 @@
     "db:local": "wrangler d1 migrations apply yea-or-nay-db --local",
     "db:remote": "wrangler d1 migrations apply yea-or-nay-db --remote",
     "types": "wrangler types",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:staging": "npm run build:static && wrangler dev --env staging",
+    "test": "node --test scripts/*.test.mjs",
+    "db:staging:local": "wrangler d1 migrations apply DB --local --env staging"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

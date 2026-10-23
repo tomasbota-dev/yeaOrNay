@@ -9,6 +9,16 @@ if (!accountId || !apiToken) {
 
 const configPath = new URL('../wrangler.jsonc', import.meta.url);
 const config = JSON.parse(await readFile(configPath, 'utf8'));
+const environment = process.argv[2];
+if (!['staging', 'production'].includes(environment)) {
+  throw new Error('Usage: node scripts/provision-cloudflare.mjs <staging|production>');
+}
+const target = environment === 'production' ? config : config.env?.[environment];
+if (!target) throw new Error(`Missing configuration for ${environment}.`);
+if (environment === 'staging' && (
+  target.d1_databases?.some(db => config.d1_databases.some(prod => prod.database_name === db.database_name || prod.database_id === db.database_id)) ||
+  target.r2_buckets?.some(bucket => config.r2_buckets.some(prod => prod.bucket_name === bucket.bucket_name))
+)) throw new Error('Staging must use separate D1 and R2 resources.');
 const apiBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}`;
 
 async function api(path, options = {}) {
@@ -28,7 +38,7 @@ async function api(path, options = {}) {
   return payload.result;
 }
 
-const databaseBinding = config.d1_databases?.find(({ binding }) => binding === 'DB');
+const databaseBinding = target.d1_databases?.find(({ binding }) => binding === 'DB');
 if (!databaseBinding) throw new Error('wrangler.jsonc must declare the DB D1 binding.');
 
 const databaseResults = await api(`/d1/database?name=${encodeURIComponent(databaseBinding.database_name)}`);
@@ -45,7 +55,7 @@ if (!database) {
 if (!database.uuid) throw new Error(`Cloudflare did not return a UUID for D1 database ${databaseBinding.database_name}.`);
 databaseBinding.database_id = database.uuid;
 
-for (const bucketBinding of config.r2_buckets || []) {
+for (const bucketBinding of target.r2_buckets || []) {
   const result = await api(`/r2/buckets?name_contains=${encodeURIComponent(bucketBinding.bucket_name)}&per_page=1000`);
   const buckets = result.buckets || [];
   let bucket = buckets.find(({ name }) => name === bucketBinding.bucket_name);
