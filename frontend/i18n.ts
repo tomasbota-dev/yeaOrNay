@@ -386,8 +386,8 @@ Object.assign(portuguese, {
     "Inicia sessão ou cria uma conta para entrar na sala {code}.",
   "Sign in to join": "Iniciar sessão para entrar",
   "Create an account": "Criar conta",
-  "Your room is open, but the image could not be uploaded. You can retry from the room.":
-    "A sala está aberta, mas não foi possível carregar a imagem. Podes tentar novamente na sala.",
+  "Your room is open, but the image could not be uploaded.":
+    "A sala está aberta, mas não foi possível carregar a imagem.",
   "Your room is open. Bring your people in.":
     "A sala está aberta. Convida o teu grupo.",
   "Profile photo updated.": "Fotografia de perfil atualizada.",
