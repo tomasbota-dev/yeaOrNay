@@ -33,27 +33,45 @@ npm run dev
 
 Open the URL printed by Wrangler (usually `http://localhost:8787`). Local data lives under `.wrangler/` and is ignored by Git.
 
-## Cloudflare deployment
+## Branches and releases
 
-The GitHub Actions workflow provisions the D1 database and R2 bucket when missing, applies pending D1 migrations, and deploys the Worker (including its scheduled trigger) on pushes to `main`. It can also be started from the repository's Actions tab.
+Start every change from the latest origin/staging on a feature/<description> or bugfix/<description> branch. Open a PR into staging. After the required Branch policy and Validate application checks pass, merge to deploy staging. Test staging, then open a PR from staging into main to release production.
 
-Configure these GitHub repository settings once:
+Use merge commits for release PRs to preserve shared history. Keep staging after releases. Both branches require PRs and checks, including for administrators. Direct pushes, force pushes, and branch deletion are blocked. See AGENTS.md for contributor instructions.
 
-- Repository variable `CLOUDFLARE_ACCOUNT_ID` with the Cloudflare account ID (already configured for this repository).
-- Repository secret `CLOUDFLARE_API_TOKEN` with an account-scoped Cloudflare API token. Grant D1 Read and Write, Workers R2 Storage Read and Write, and Workers Scripts Edit.
+## Cloudflare environments
 
-For example, after creating the token, run `gh secret set CLOUDFLARE_API_TOKEN --repo tomasbota-dev/yeaOrNay`. The account ID is currently configured in `wrangler.jsonc`; the provisioning step updates that file in the workflow checkout if it creates a new D1 database.
+| Resource | Production (main) | Staging (staging) |
+| --- | --- | --- |
+| Worker | yea-or-nay | yea-or-nay-staging |
+| D1 database | yea-or-nay-db | yea-or-nay-staging-db |
+| R2 bucket | yea-or-nay-room-icons | yea-or-nay-staging-room-icons |
 
-The Worker is published on its `workers.dev` subdomain. A custom domain is optional. Review the [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [D1 pricing and limits](https://developers.cloudflare.com/d1/platform/pricing/) before a larger launch; free-plan quotas are daily caps, and requests can fail when a cap is reached.
+Staging uses a named Wrangler environment with explicit bindings. Production keeps its existing top-level configuration and resource names. Accounts, sessions, uploads, and all other data are separate. Staging starts empty; production data is never copied. Both Workers run the daily cleanup cron.
 
-## GitHub
+For local staging development, run npm run db:staging:local and npm run dev:staging. The committed staging UUID is a placeholder; Actions resolves the real database UUID by name before migrations and deployment.
 
-To create a private remote from this folder after authenticating `gh`:
+## GitHub Actions
 
-```sh
-gh auth status
-gh repo create tomasbota-dev/yeaOrNay --private --source . --remote origin --push
-```
+PR checks enforce feature/* or bugfix/* into staging, and same-repository staging into main. They build assets, check TypeScript, test branch policy, and dry-run both Worker configurations without Cloudflare credentials.
+
+Merges into staging or main run separate jobs:
+
+1. **Validate and build** generates static assets, checks types, tests branch policy, and uploads the validated Worker bundle.
+2. **Provision D1 and R2** checks the selected environment's resources by name, reuses existing resources, creates missing resources, and uploads the resolved Wrangler configuration.
+3. **Apply database migrations** downloads that config and applies pending migrations to the selected database.
+4. **Deploy Worker and cron** publishes the validated bundle with the resolved config. Wrangler creates the Worker if absent.
+
+Each job waits for the previous job to succeed. Deployments are serialized per branch and use separate staging and production GitHub Environments. Manual runs are allowed only on these two branches. Migrations must remain compatible with the currently deployed Worker because they run before deployment; deployment failures do not roll back migrations.
+
+Repository configuration:
+
+- Variable CLOUDFLARE_ACCOUNT_ID with the Cloudflare account ID.
+- Secret CLOUDFLARE_API_TOKEN with account-scoped D1 Edit, Workers R2 Storage Edit, and Workers Scripts Edit permissions.
+
+Credentials stay in Actions. Resolved database IDs pass between jobs as an artifact; provisioning does not commit generated configuration or push to protected branches. The same workflow provisions either environment.
+
+The Workers publish to separate workers.dev subdomains; find their URLs in deployment logs. See [Wrangler environments](https://developers.cloudflare.com/workers/wrangler/environments/) for binding behavior.
 
 ## Account recovery
 

@@ -1,50 +1,100 @@
-name: Provision and deploy
-
+name: Deploy Cloudflare
 on:
   push:
-    branches: [main]
+    branches: [staging, main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
-  group: cloudflare-production
+  group: cloudflare-${{ github.ref_name }}
   cancel-in-progress: false
-
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 jobs:
-  deploy:
+  build:
+    name: Validate and build
+    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Check TypeScript
-        run: npm run typecheck
-
-      - name: Provision D1 and R2 resources
-        run: node scripts/provision-cloudflare.mjs
+      - run: npm ci
+      - run: npm run build:static
+      - run: npm run typecheck
+      - run: env -u GITHUB_EVENT_PATH node --test scripts/*.test.mjs
+      - name: Bundle Worker
+        run: npx wrangler deploy --env="$WRANGLER_ENV" --dry-run --outdir dist
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_ENV: ${{ github.ref_name == 'staging' && 'staging' || '' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worker-bundle
+          path: dist
+          retention-days: 7
+  provision:
+    name: Provision D1 and R2
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'staging' && 'staging' || 'production' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Ensure environment resources exist
+        run: node scripts/provision-cloudflare.mjs "$TARGET_ENV"
+        env:
+          TARGET_ENV: ${{ github.ref_name == 'staging' && 'staging' || 'production' }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Apply D1 migrations
-        run: npx wrangler d1 migrations apply yea-or-nay-db --remote
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resolved-cloudflare-config
+          path: wrangler.jsonc
+          retention-days: 7
+  migrate:
+    name: Apply database migrations
+    needs: provision
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'staging' && 'staging' || 'production' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: resolved-cloudflare-config
+      - name: Apply pending migrations
+        run: npx wrangler d1 migrations apply DB --remote --env="$WRANGLER_ENV"
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_ENV: ${{ github.ref_name == 'staging' && 'staging' || '' }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy Worker and scheduled triggers
-        run: npm run deploy
+  deploy:
+    name: Deploy Worker and cron
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'staging' && 'staging' || 'production' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: resolved-cloudflare-config
+      - uses: actions/download-artifact@v4
+        with:
+          name: worker-bundle
+          path: dist
+      - name: Publish the validated bundle
+        run: npx wrangler deploy dist/index.js --no-bundle --env="$WRANGLER_ENV"
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_ENV: ${{ github.ref_name == 'staging' && 'staging' || '' }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
