@@ -2887,3 +2887,28 @@ footer span,
 :root[data-theme="dark"] .auth-confirm:has([aria-invalid="true"]) {
   color: var(--danger);
 }
+
+/* Shared controls follow the active palette. */
+.site-header nav:empty { display: none; }
+.preference { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.preference span { font-size: 10px; }
+.toast { background: var(--surface); color: var(--ink); border: 1px solid var(--blue); box-shadow: 0 8px 32px #0003; max-width: calc(100vw - 32px); overflow-wrap: anywhere; }
+.side section > .button + .button { margin-top: 12px; }
+.button.secondary.room-delete { color: var(--danger); border-color: var(--danger); }
+.button.secondary.room-delete:hover { background: var(--danger); color: var(--paper); }
+.field-label { font-size: 14px; font-weight: bold; }
+.duration-picker { position: relative; color: var(--ink); background: var(--surface); border: 1px solid var(--line); }
+.duration-picker summary { cursor: pointer; padding: 15px; display: flex; justify-content: space-between; gap: 16px; list-style: none; font-size: 14px; }
+.duration-picker summary::-webkit-details-marker { display: none; }
+.duration-picker summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.duration-options { border-top: 1px solid var(--line); padding: 6px; }
+.duration-options label { display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer; font-weight: normal; }
+.duration-options label:has(:checked), .duration-options label:hover { background: var(--paper); color: var(--blue); }
+.duration-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--blue); }
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+.logo-loader { position: fixed; inset: 0; z-index: 4; background: var(--paper); display: grid; place-items: center; }
+.loader-mark { position: relative; font: 900 52px/.82 Arial, sans-serif; letter-spacing: -3px; color: var(--line); }
+.loader-fill { position: absolute; inset: 0; color: var(--blue); clip-path: inset(100% 0 0); animation: logo-fill 1.8s ease-in-out infinite; }
+@keyframes logo-fill { 0% { clip-path: inset(100% 0 0); } 70%, 100% { clip-path: inset(0 0 0); } }
+@media (prefers-reduced-motion: reduce) { .loader-fill { animation: none; clip-path: inset(35% 0 0); } }

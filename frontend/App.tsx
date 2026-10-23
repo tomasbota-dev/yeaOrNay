@@ -8,6 +8,30 @@ import {
 import { useI18n, translateError } from "./i18n";
 import { LegalPage } from "./legal";
 
+const durationOptions = [
+  ["15", "15 minutes · quick pick"],
+  ["30", "30 minutes · just right"],
+  ["60", "1 hour · take your time"],
+  ["180", "3 hours"],
+  ["1440", "24 hours · decide tomorrow"],
+  ["custom", "Custom date & time"],
+] as const;
+
+function LogoLoader({ label }: { label: string }) {
+  return <div className="logo-loader" role="status" aria-label={label}>
+    <div className="loader-mark" aria-hidden="true">
+      <span>yea↗<br />or nay↘</span>
+      <span className="loader-fill">yea↗<br />or nay↘</span>
+    </div>
+    <span className="sr-only">{label}</span>
+  </div>;
+}
+function PreferenceIcon({ kind }: { kind: "language" | "sun" | "moon" }) {
+  return <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {kind === "language" ? <><path d="M3 5h12M9 3v2M5 5c1 6 4 9 9 11M13 5c-1 5-4 9-10 12M14 21l4-10 4 10M16 17h4" /></> : kind === "sun" ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" /></> : <path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z" />}
+  </svg>;
+}
+
 type T = (en: string, params?: Record<string, string | number>) => string;
 type User = {
   id: string;
@@ -564,9 +588,7 @@ export default function App() {
             or nay<span>↘</span>
           </a>
           <nav aria-label={t("Main navigation")}>
-            {user
-              ? link("/", t("Your rooms"), route === "/" ? "active" : "")
-              : link("/", t("The idea"))}
+            {user && link("/", t("Your rooms"), route === "/" ? "active" : "")}
             {user && (
               <button
                 className="nav-text"
@@ -578,11 +600,6 @@ export default function App() {
                 {t("Feedback")}
               </button>
             )}
-            {link(
-              "/privacy",
-              t("Privacy"),
-              legalKind === "privacy" ? "active" : "",
-            )}
           </nav>
           <div className="header-actions">
             <button
@@ -590,7 +607,7 @@ export default function App() {
               onClick={() => setLocale(locale === "pt-PT" ? "en-US" : "pt-PT")}
               aria-label={t("Change language")}
             >
-              {locale === "pt-PT" ? "EN" : "PT"}
+              <PreferenceIcon kind="language" /><span>{locale === "pt-PT" ? "PT" : "EN"}</span>
             </button>
             <button
               className="preference"
@@ -601,7 +618,7 @@ export default function App() {
                   : "Switch to dark mode",
               )}
             >
-              {theme === "dark" ? "☀" : "◐"}
+              <PreferenceIcon kind={theme === "dark" ? "sun" : "moon"} />
             </button>
             {user ? (
               <div className="account-menu">
@@ -655,9 +672,7 @@ export default function App() {
   let content: ReactNode;
   if (boot)
     content = (
-      <div className="loading-page" role="status">
-        {t("Getting things ready…")}
-      </div>
+      <LogoLoader label={t("Getting things ready…")} />
     );
   else if (bootError)
     content = (
@@ -798,7 +813,7 @@ export default function App() {
           </div>
         </div>
         {loading && !roomsLoaded ? (
-          <p role="status">{t("Loading your rooms…")}</p>
+          <LogoLoader label={t("Loading your rooms…")} />
         ) : roomsLoaded && !rooms.length ? (
           <section className="empty-state">
             <p className="eyebrow">{t("Your first good plan")}</p>
@@ -893,9 +908,7 @@ export default function App() {
       room?.ideas.filter((i) => room.winner_ids.includes(i.id)) || [];
     content =
       loading && !room && !preview ? (
-        <div className="page loading-page" role="status">
-          {t("Opening your room…")}
-        </div>
+        <LogoLoader label={t("Opening your room…")} />
       ) : preview ? (
         <section className="page invitation">
           <p className="eyebrow">{t("You’ve got an invite.")}</p>
@@ -1310,37 +1323,6 @@ export default function App() {
                   onClick={() =>
                     void perform(async () => {
                       try {
-                        await navigator.clipboard.writeText(
-                          location.origin + "/room/" + code,
-                        );
-                        notify(t("Invite link copied."));
-                      } catch {
-                        setError(
-                          t(
-                            "Could not copy automatically. Select the invite link below.",
-                          ),
-                        );
-                      }
-                    })
-                  }
-                >
-                  {t("Copy invite link")} ↗
-                </button>
-                <label className="sr-only" htmlFor="invite-link">
-                  {t("Invite link")}
-                </label>
-                <input
-                  className="invite-link"
-                  id="invite-link"
-                  readOnly
-                  value={location.origin + "/room/" + code}
-                  onFocus={(e) => e.target.select()}
-                />
-                <button
-                  className="text-button"
-                  onClick={() =>
-                    void perform(async () => {
-                      try {
                         await navigator.clipboard.writeText(code);
                         notify(t("Room code copied."));
                       } catch {
@@ -1350,6 +1332,23 @@ export default function App() {
                   }
                 >
                   {t("Copy room code")}
+                </button>
+                <button
+                  className="button secondary"
+                  onClick={() =>
+                    void perform(async () => {
+                      try {
+                        await navigator.clipboard.writeText(
+                          location.origin + "/room/" + code,
+                        );
+                        notify(t("Invite link copied."));
+                      } catch {
+                        notify(location.origin + "/room/" + code);
+                      }
+                    })
+                  }
+                >
+                  {t("Copy invite link")} ↗
                 </button>
               </section>
               <section>
@@ -1381,46 +1380,8 @@ export default function App() {
                         {t("End voting")}
                       </button>
                     )}
-                    <label className="image-change">
-                      {t("Change room image")}
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          e.target.value = "";
-                          if (file) {
-                            if (
-                              ![
-                                "image/jpeg",
-                                "image/png",
-                                "image/webp",
-                              ].includes(file.type)
-                            ) {
-                              setError(t("Use a JPG, PNG, or WebP image."));
-                              return;
-                            }
-                            if (file.size > 262144) {
-                              setError(
-                                t("Choose an image smaller than 256 KB."),
-                              );
-                              return;
-                            }
-                            void perform(async () => {
-                              await api(
-                                "/api/rooms/" + code + "/icon",
-                                "POST",
-                                file,
-                              );
-                              await refreshRoom();
-                              notify(t("Room image updated."));
-                            });
-                          }
-                        }}
-                      />
-                    </label>
                     <button
-                      className="text-button danger"
+                      className="button secondary room-delete"
                       disabled={busy}
                       onClick={() =>
                         ask(
@@ -1555,7 +1516,7 @@ export default function App() {
                 notify(
                   warning
                     ? t(
-                        "Your room is open, but the image could not be uploaded. You can retry from the room.",
+                        "Your room is open, but the image could not be uploaded.",
                       )
                     : t("Your room is open. Bring your people in."),
                 );
@@ -1998,28 +1959,17 @@ function CreatePage({
         )}
       </div>
       <div className="field">
-        <label htmlFor="create-duration">
-          {t("How long should voting last?")}
-        </label>
-        <select
-          id="create-duration"
-          name="duration"
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-        >
-          {[
-            [15, "15 minutes · quick pick"],
-            [30, "30 minutes · just right"],
-            [60, "1 hour · take your time"],
-            [180, "3 hours"],
-            [1440, "24 hours · decide tomorrow"],
-            ["custom", "Custom date & time"],
-          ].map(([value, label]) => (
-            <option key={value} value={value}>
-              {t(String(label))}
-            </option>
-          ))}
-        </select>
+        <span id="duration-label" className="field-label">{t("How long should voting last?")}</span>
+        <input type="hidden" name="duration" value={duration} />
+        <details className="duration-picker">
+          <summary aria-labelledby="duration-label duration-value"><span id="duration-value">{t(durationOptions.find(([value]) => value === duration)?.[1] || "30 minutes · just right")}</span><span aria-hidden="true">⌄</span></summary>
+          <div className="duration-options" role="radiogroup" aria-labelledby="duration-label">
+            {durationOptions.map(([value, label]) => <label key={value}>
+              <input type="radio" name="duration-choice" value={value} checked={duration === value}
+                onChange={() => setDuration(value)} />{t(label)}
+            </label>)}
+          </div>
+        </details>
       </div>
       {duration === "custom" && (
         <div className="field">
