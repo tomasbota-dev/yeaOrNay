@@ -83,7 +83,8 @@
         }
       ],
       "vars": {
-        "TURNSTILE_SITE_KEY": ""
+        "TURNSTILE_SITE_KEY": "",
+        "TURNSTILE_HOSTNAME": "yea-or-nay-staging.it-tomasbota.workers.dev"
       }
     }
   },
@@ -122,6 +123,7 @@
     }
   ],
   "vars": {
-    "TURNSTILE_SITE_KEY": ""
+    "TURNSTILE_SITE_KEY": "",
+    "TURNSTILE_HOSTNAME": "yea-or-nay.it-tomasbota.workers.dev"
   }
 }
