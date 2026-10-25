@@ -22,6 +22,8 @@ Changes are recorded before release. A staging merge does not constitute a produ
 
 ### Operations and documentation
 
+- Declare verified environment Turnstile hostnames so provisioning does not need account-subdomain discovery permission. Setup warnings report only safe HTTP status/error codes and endpoint paths to identify missing permissions without echoing secrets.
+
 - Add security/realtime ADR, deployment/setup and capacity guide, and repository requirements for documentation, changelog entries and deployment evidence.
 - D1 migration `0005_public_launch_guards.sql` and SQLite Durable Object migration `v1-security-realtime` are required. No paid service or account-plan upgrade is enabled by this change.
 - Public-launch requirements still include operator/contact details, deployed Turnstile confirmation, account/zone security review and usage monitoring. Email verification and password recovery remain unavailable.

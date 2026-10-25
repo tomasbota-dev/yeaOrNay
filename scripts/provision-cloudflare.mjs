@@ -34,7 +34,10 @@ async function api(path, options = {}) {
   const payload = await response.json();
   if (!response.ok || !payload.success) {
     const reasons = (payload.errors || []).map(({ code, message }) => `${code}: ${message}`).join('; ');
-    throw new Error(`Cloudflare API ${options.method || 'GET'} ${path} failed (${response.status})${reasons ? `: ${reasons}` : ''}`);
+    const error = new Error(`Cloudflare API ${options.method || 'GET'} ${path} failed (${response.status})${reasons ? `: ${reasons}` : ''}`);
+    // Status/codes/path are safe diagnostics; provider messages can echo input.
+    error.diagnostic = `${options.method || 'GET'} ${path.split('?')[0]} HTTP ${response.status}; codes ${(payload.errors || []).map(({code})=>code).join(',') || 'none'}`;
+    throw error;
   }
   return payload.result;
 }
@@ -75,12 +78,16 @@ if (process.env.PROVISION_TURNSTILE === 'true') {
   // A missing permission must never silently turn bot verification off.
   target.vars = { ...target.vars, TURNSTILE_SITE_KEY: '' };
   try {
-    const { subdomain } = await api('/workers/subdomain');
-    if (!subdomain) throw new Error('Missing Workers hostname');
-    target.vars.TURNSTILE_SITE_KEY = await provisionTurnstile({ api, target, hostname: `${target.name}.${subdomain}.workers.dev` });
+    let hostname = target.vars.TURNSTILE_HOSTNAME;
+    if (!hostname) {
+      const { subdomain } = await api('/workers/subdomain');
+      if (!subdomain) throw new Error('Missing Workers hostname');
+      hostname = `${target.name}.${subdomain}.workers.dev`;
+    }
+    target.vars.TURNSTILE_SITE_KEY = await provisionTurnstile({ api, target, hostname });
     console.log('Signup protection configured for the selected environment.');
-  } catch {
-    console.warn('::warning::Turnstile setup unavailable. Signup remains disabled. Grant Turnstile Sites Write to the deployment token and rerun deployment.');
+  } catch (error) {
+    console.warn(`::warning::Turnstile setup unavailable. Signup remains disabled. Verify Turnstile Sites Write and rerun deployment.${error.diagnostic ? ` ${error.diagnostic}` : ''}`);
   }
 }
 await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);

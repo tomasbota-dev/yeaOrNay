@@ -46,9 +46,11 @@ export async function provisionTurnstile({ api, target, hostname }) {
     await api(`/workers/scripts/${encodeURIComponent(target.name)}/secrets`, {
       method: 'PUT', body: JSON.stringify({ name: 'TURNSTILE_SECRET_KEY', text: secret, type: 'secret_text' }),
     });
-  } catch {
+  } catch (error) {
     // Do not propagate provider errors that could echo the secret request body.
-    throw new Error('Could not install the Turnstile Worker secret; signup must remain disabled.');
+    const sanitized = new Error('Could not install the Turnstile Worker secret; signup must remain disabled.');
+    if (typeof error?.diagnostic === 'string') sanitized.diagnostic = error.diagnostic;
+    throw sanitized;
   }
   return sitekey;
 }
