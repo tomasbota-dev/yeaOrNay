@@ -9,3 +9,11 @@
 - Merged `feature/*` and `bugfix/*` branches are deleted by Actions. Keep repository-wide automatic branch deletion disabled so `staging` is retained after releases.
 - Cloudflare provisioning belongs in GitHub Actions: check whether resources exist and create missing resources before migrations and deployment. Keep staging and production data separate.
 - Run static asset generation, TypeScript checking, policy tests, and Wrangler dry runs for both environments when changing deployment configuration.
+
+# Documentation and validation
+
+- Update relevant documentation in the same PR whenever behavior, security controls, configuration, operational procedures, or architecture changes. Create documentation when no suitable guide exists.
+- Record user-visible changes, security fixes, and required setup/migration steps in `CHANGELOG.md` under Unreleased; date a release only when actually released.
+- Add or update an ADR for material architecture decisions, including alternatives, costs/free-plan limits, and failure behavior.
+- Keep en-US and pt-PT text complete, including errors and accessibility labels. Security changes require meaningful denial, boundary, and concurrency tests where applicable.
+- Never describe a push, dry run, or passed unit suite as a verified deployment. Check Actions and the served environment after merging; disclose setup blockers and remaining launch requirements.

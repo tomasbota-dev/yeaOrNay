@@ -1,5 +1,11 @@
 # V2 implementation and release notes
 
+## Security and live updates (25 October 2026)
+
+`src/security.ts` handles bounded JSON/images and signup verification. `src/abuse.ts` supplies strict expiring SQLite DO counters. `src/realtime.ts` supplies a Worker-private hibernating room hub. `src/index.ts` authenticates handshakes and mutations, notifies after commit and applies route-specific limits. D1 migration 0005 enforces storage caps and critical write-time checks under concurrency.
+
+`frontend/Turnstile.tsx` loads the official explicit-render widget. `App.tsx` uses notification-driven snapshots, preserves queued changes, and backs off degraded requests. Account email is read-only; deletion submits a password in JSON. See [the operational guide](public-launch-security.md) for exact policies, setup and failure behavior, and [ADR 0004](../adr/0004-abuse-controls-and-room-realtime.md) for tradeoffs. Daily cleanup and public media policy remain in force.
+
 React renders the approved decision-board design. Vite emits hashed JS/CSS and a shared document into `dist/client`. Wrangler routes API, uploaded media, and legacy legal URLs to the Worker; other assets/navigation use Static Assets. The Worker accesses D1/R2 through bindings. Same-origin requests use cookie credentials.
 
 Direct room/legal/profile links resolve to the shell. Cloudflare's configured SPA fallback also returns the shell for unmatched asset URLs; deployed hashed asset URLs must be checked for correct MIME type and content. CI packages `dist/client` and `dist/worker` together before publishing with the provisioned environment configuration.

@@ -11,6 +11,7 @@ for (const existing of [true, false]) {
     try {
       await mkdir(join(root, 'scripts'));
       await copyFile(new URL('./provision-cloudflare.mjs', import.meta.url), join(root, 'scripts/provision-cloudflare.mjs'));
+      await copyFile(new URL('./provision-turnstile.mjs', import.meta.url), join(root, 'scripts/provision-turnstile.mjs'));
       const original = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
       await writeFile(join(root, 'wrangler.jsonc'), JSON.stringify(original));
       const mock = `

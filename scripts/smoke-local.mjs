@@ -12,6 +12,7 @@ async function request(
     method,
     redirect: "manual",
     headers: {
+      origin: origin.origin,
       ...(cookie ? { cookie } : {}),
       ...(body ? { "content-type": "application/json" } : {}),
       ...(raw ? { "content-type": "image/png" } : {}),
@@ -209,5 +210,5 @@ try {
   );
 } finally {
   for (const user of [guest, host, outsider])
-    await request("/api/account", { cookie: user.cookie, method: "DELETE" });
+    await request("/api/account", { cookie: user.cookie, method: "DELETE", body: {password:"Local-test-passphrase-2026"} });
 }

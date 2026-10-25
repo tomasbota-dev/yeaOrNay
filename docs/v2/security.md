@@ -1,5 +1,11 @@
 # V2 security review
 
+## Current hardening (25 October 2026)
+
+The new [security and realtime operations guide](public-launch-security.md) supersedes the historical review's application-security gaps: strict expiring DO counters, signup Turnstile verification, byte-enforced JSON limits, database-enforced quotas/write guards, sensitive deletion authentication, immutable email, and protected hibernating room subscriptions are implemented. See [ADR 0004](../adr/0004-abuse-controls-and-room-realtime.md) for decisions and failure behavior. Public-by-URL media remains unchanged.
+
+This is source hardening, not certification of account settings or public-launch readiness. Actual Turnstile setup, zone controls, quota monitoring, legal placeholders, email ownership/recovery and deployed CPU limits still require the checks in that guide. The older review below is retained as historical evidence and must not be interpreted as a current description of missing ignore rules or the retired asset map.
+
 ## Implementation follow-up
 
 The V2 implementation adds `.dev.vars.*` ignore coverage and serves Vite-built frontend assets from Workers Static Assets. The old embedded asset map is retired. The client receives no D1/R2 authentication credentials. API errors retain their existing message and add a stable code. Explicit vote clearing remains subject to authentication, membership, own-idea and closed-room restrictions. Worker boundary regression tests and a loopback-only D1/R2 smoke script validate these behaviors.
