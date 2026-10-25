@@ -4,6 +4,14 @@ Changes are recorded before release. A staging merge does not constitute a produ
 
 ## Unreleased
 
+### Search discovery
+
+- Prerender English/European Portuguese public homepages and dinner, movie-night, weekend and voting-rules guides, with canonical/language links and social metadata in initial HTML.
+- Separate public rendering from session/API availability; reuse the existing landing design and optional animation/theme controls.
+- Add production-only sitemap and robots policy; exclude account/room/API/media URLs, legal drafts, staging and previews from indexing. Return real 404s for unknown paths.
+- Replace global SPA fallback with explicit app routes. Root retains a signed-in dashboard shortcut and anonymous language-aware homepage redirects.
+- Add SEO tests, operational guide and ADR 0005. No billing, ads, analytics or monetization changes. Search ownership verification/submission remains an operator step after release.
+
 ### Security
 
 - Add atomic, expiring Durable Object rate limits for API/media access, login, signup, room actions, uploads and sensitive operations. Rate-limit responses include stable codes and Retry-After; unavailable protection fails closed.

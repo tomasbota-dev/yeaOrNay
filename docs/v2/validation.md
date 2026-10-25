@@ -1,5 +1,15 @@
 # V2 validation record
 
+## SEO implementation checks (25 October 2026)
+
+- Static build generated ten public HTML documents; both TypeScript projects passed.
+- All 39 tests passed, including generated-HTML localization/metadata, origin/environment indexing boundaries, private-route exclusions, sitemap contents, aliases, HEAD and true 404 coverage.
+- Staging and production Wrangler dry runs passed. These are not deployment proof.
+- Local D1/R2 application smoke and local security/realtime smoke passed, including authenticated WebSocket notifications and revocation.
+- Served HTTP checks passed for all ten public GET/HEAD pages, missing URLs and canonical aliases. Local HTML is deliberately excluded from indexing.
+- Browser review at mobile/desktop widths verified homepage/guide layout and corresponding-page language switching, without hydration warnings. The mobile homepage had no horizontal document overflow.
+- Google/Bing verification, sitemap submission, deployed indexing checks and field Core Web Vitals remain release/operator steps in [SEO operations](../seo.md).
+
 ## Security/realtime verification (25 October 2026)
 
 The current hardening pass adds real workerd tests for concurrent strict admission, retained counters, socket authorization/caps, membership/session revocation and client-message rejection; real D1 tests for concurrent caps, session eviction, bans/closure and transactional rollback; and request-boundary tests for streamed JSON, challenge hostname/action/failure, strict Origin and Retry-After. Provisioning tests cover isolated widget creation/reuse and avoiding secret artifacts. These checks extend rather than replace the historical V2 checks below.

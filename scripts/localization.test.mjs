@@ -92,7 +92,7 @@ test("Every literal React UI translation key has Portuguese coverage", () => {
       translatedChoices(expression.whenFalse);
     }
   }
-  for (const file of ["App.tsx", "legal.tsx", "Turnstile.tsx"]) {
+  for (const file of ["App.tsx", "Landing.tsx", "legal.tsx", "Turnstile.tsx"]) {
     const text = readFileSync(
       new URL(`../frontend/${file}`, import.meta.url),
       "utf8",
@@ -109,7 +109,7 @@ test("Every literal React UI translation key has Portuguese coverage", () => {
         translatedChoices(node.arguments[0]);
       // App's duration options, feedback ratings, and landing stages use [value, label] arrays.
       if (
-        file === "App.tsx" &&
+        (file === "App.tsx" || file === "Landing.tsx") &&
         ts.isArrayLiteralExpression(node) &&
         node.elements.length &&
         node.elements.every(

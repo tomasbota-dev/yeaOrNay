@@ -83,7 +83,9 @@ test("SPA navigation delegates to assets and preserves asset metadata with secur
   );
   assert.equal(response.status, 200);
   assert.equal(await response.text(), "<html>V2</html>");
-  assert.deepEqual(calls.assets, ["https://example.test/room/ABC"]);
+  assert.deepEqual(calls.assets, ["https://example.test/index.html"]);
+  assert.match(response.headers.get("x-robots-tag"), /noindex/);
+  assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("etag"), "asset-version");
   assert.match(
     response.headers.get("content-security-policy"),
@@ -192,6 +194,7 @@ test("existing image URLs remain public and expose image bytes without storage c
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/png");
     assert.equal(response.headers.get("cache-control"), "public, max-age=3600");
+    assert.match(response.headers.get("x-robots-tag"), /noindex/);
     assert.equal(await response.text(), "image bytes");
     assert.equal(response.headers.has("authorization"), false);
     assert.equal(response.headers.has("set-cookie"), false);

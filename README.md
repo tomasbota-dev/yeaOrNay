@@ -5,6 +5,7 @@ A mobile-first app for making plans together. Create a room, share its code, add
 ## V2 architecture
 
 - React + TypeScript SPA built with Vite in `frontend/`.
+- Prerendered English/Portuguese public homepages and planning guides; private application remains a SPA. See the [SEO launch guide](docs/seo.md) and [ADR 0005](docs/adr/0005-public-pages-and-search-indexing.md).
 - Workers Static Assets serves `dist/client`; API and image routes use `src/index.ts`.
 - D1 stores accounts, sessions, rooms, ideas, votes, comments, and feedback. R2 stores uploaded images.
 - SQLite Durable Objects enforce atomic abuse limits and coordinate authenticated hibernating room WebSockets. Turnstile protects signup.
@@ -36,11 +37,11 @@ npx wrangler deploy --env staging --dry-run --outdir dist/staging
 npx wrangler deploy --env="" --dry-run --outdir dist/production
 ```
 
-`build:static` generates Vite assets instead of an embedded TypeScript map. `npm run build` is an alias. Worker/DOM TypeScript configs are separate. Deploy frontend assets and Worker together.
+`build:static` generates Vite assets and prerenders public pages. `npm run build` is an alias. Worker/DOM TypeScript configs are separate. Deploy frontend assets and Worker together. SEO tests inspect generated HTML, so build before running the suite.
 
 ## Product behavior
 
-Signed-out visitors see the landing; signed-in users see their dashboard. Invite paths survive authentication. Rooms support preset/custom future deadlines, images, ideas, comments, vote changes/removal, tied winners, and moderation. Users cannot vote on their own ideas. Hidden tabs pause polling.
+Signed-out visitors at `/` are redirected to `/en/` (or `/pt/` with `?lang=pt-PT`); session-cookie holders are redirected to the authenticated dashboard. Public pages do not depend on session APIs. Invite paths survive authentication. Rooms support preset/custom future deadlines, images, ideas, comments, vote changes/removal, tied winners, and moderation. Users cannot vote on their own ideas. Hidden tabs pause live connections.
 
 Profile contains name, read-only email, photo, and password-confirmed deletion. The account menu contains Profile and Log out. Authentication uses secure HttpOnly cookies. Password recovery and email verification are not implemented; email changes are disabled until ownership verification exists.
 
