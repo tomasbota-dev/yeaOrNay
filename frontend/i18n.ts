@@ -45,6 +45,10 @@ export const portuguese: Record<string, string> = {
   ideas: "ideias",
   "Jump in ↗": "Entrar ↗",
   "See the result ↗": "Ver resultado ↗",
+  "Ongoing decisions": "Decisões em curso",
+  "Concluded decisions": "Decisões concluídas",
+  "No ongoing decisions. Start a room and bring your people together.": "Sem decisões em curso. Cria uma sala e junta o teu grupo.",
+  "No concluded decisions yet. Finished rooms will appear here.": "Ainda não há decisões concluídas. As salas terminadas aparecem aqui.",
   "Your rooms": "As tuas salas",
   "You’ve got an invite!": "Tens um convite!",
   "is ready for you. Join the room to add ideas and cast your vote.":

@@ -587,20 +587,6 @@ export default function App() {
             <br />
             or nay<span>↘</span>
           </a>
-          <nav aria-label={t("Main navigation")}>
-            {user && link("/", t("Your rooms"), route === "/" ? "active" : "")}
-            {user && (
-              <button
-                className="nav-text"
-                onClick={() => {
-                  setError("");
-                  setFeedback(true);
-                }}
-              >
-                {t("Feedback")}
-              </button>
-            )}
-          </nav>
           <div className="header-actions">
             <button
               className="preference"
@@ -633,6 +619,12 @@ export default function App() {
                 </button>
                 {menu && (
                   <div className="account-dropdown">
+                    {link("/", t("Your rooms"))}
+                    <button onClick={() => {
+                      setError("");
+                      setFeedback(true);
+                      setMenu(false);
+                    }}>{t("Feedback")}</button>
                     {link("/profile", t("Profile"))}
                     <button
                       onClick={() =>
@@ -826,11 +818,10 @@ export default function App() {
             {(["open", "closed"] as const).map((status) => {
               const items = rooms.filter((r) => r.status === status);
               return (
-                items.length > 0 && (
-                  <section key={status}>
+                  <section className="decision-group" key={status} aria-label={t(status === "open" ? "Ongoing decisions" : "Concluded decisions")}>
                     <div className="section-label">
                       <span>
-                        {t(status === "open" ? "IN THE WORKS" : "GOOD CALLS")}
+                        {t(status === "open" ? "Ongoing decisions" : "Concluded decisions")}
                       </span>
                       <span>
                         {t(
@@ -839,6 +830,7 @@ export default function App() {
                         )}
                       </span>
                     </div>
+                    {!items.length && <p className="decision-empty muted">{t(status === "open" ? "No ongoing decisions. Start a room and bring your people together." : "No concluded decisions yet. Finished rooms will appear here.")}</p>}
                     <div className="rooms">
                       {items.map((r) =>
                         link(
@@ -886,7 +878,6 @@ export default function App() {
                       )}
                     </div>
                   </section>
-                )
               );
             })}
           </>

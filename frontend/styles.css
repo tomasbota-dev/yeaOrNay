@@ -2912,3 +2912,15 @@ footer span,
 .loader-fill { position: absolute; inset: 0; color: var(--blue); clip-path: inset(100% 0 0); animation: logo-fill 1.8s ease-in-out infinite; }
 @keyframes logo-fill { 0% { clip-path: inset(100% 0 0); } 70%, 100% { clip-path: inset(0 0 0); } }
 @media (prefers-reduced-motion: reduce) { .loader-fill { animation: none; clip-path: inset(35% 0 0); } }
+
+/* Quiet header controls and clearly separated decision groups. */
+.header-actions { margin-left: auto; }
+.header-actions .preference,
+.header-actions .user-button { border: 0; border-radius: 50%; }
+.header-actions .preference:hover,
+.header-actions .user-button:hover { background: var(--surface); }
+.decision-group + .decision-group { margin-top: 48px; }
+.decision-group .section-label > span:first-child { font: 700 20px Arial, sans-serif; letter-spacing: -0.5px; }
+.decision-empty { padding: 8px 0 28px; margin: 0; }
+.idea { background: var(--surface); }
+.idea-top { color: var(--muted); }
