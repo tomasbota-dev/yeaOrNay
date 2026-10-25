@@ -33,10 +33,9 @@ test("Portuguese templates retain and interpolate every named parameter", () => 
 });
 
 test("Every literal API error has an explicit Portuguese translation", () => {
-  const backend = readFileSync(
-    new URL("../src/index.ts", import.meta.url),
-    "utf8",
-  );
+  const backend = ["index.ts", "security.ts"].map(file => readFileSync(
+    new URL(`../src/${file}`, import.meta.url), "utf8",
+  )).join("\n");
   const errors = [
     ...backend.matchAll(/(?:new HttpError|return fail)\('([^']+)'/g),
   ].map((match) => match[1]);
@@ -93,7 +92,7 @@ test("Every literal React UI translation key has Portuguese coverage", () => {
       translatedChoices(expression.whenFalse);
     }
   }
-  for (const file of ["App.tsx", "legal.tsx"]) {
+  for (const file of ["App.tsx", "legal.tsx", "Turnstile.tsx"]) {
     const text = readFileSync(
       new URL(`../frontend/${file}`, import.meta.url),
       "utf8",

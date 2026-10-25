@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { provisionTurnstile } from './provision-turnstile.mjs';
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
@@ -70,5 +71,17 @@ for (const bucketBinding of target.r2_buckets || []) {
   }
 }
 
+if (process.env.PROVISION_TURNSTILE === 'true') {
+  // A missing permission must never silently turn bot verification off.
+  target.vars = { ...target.vars, TURNSTILE_SITE_KEY: '' };
+  try {
+    const { subdomain } = await api('/workers/subdomain');
+    if (!subdomain) throw new Error('Missing Workers hostname');
+    target.vars.TURNSTILE_SITE_KEY = await provisionTurnstile({ api, target, hostname: `${target.name}.${subdomain}.workers.dev` });
+    console.log('Signup protection configured for the selected environment.');
+  } catch {
+    console.warn('::warning::Turnstile setup unavailable. Signup remains disabled. Grant Turnstile Sites Write to the deployment token and rerun deployment.');
+  }
+}
 await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 console.log('Cloudflare resource bindings are ready for Wrangler.');

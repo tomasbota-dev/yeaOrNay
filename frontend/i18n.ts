@@ -5,6 +5,25 @@ export type TranslationParams = Record<string, string | number>;
 export type Translate = (english: string, params?: TranslationParams) => string;
 
 export const portuguese: Record<string, string> = {
+  "This account or room has reached its capacity. Please remove unused content.": "Esta conta ou sala atingiu o limite de capacidade. Remove conteúdo que já não uses.",
+  "Room access or voting status changed. Refresh and try again.": "O acesso à sala ou o estado da votação mudou. Atualiza e tenta novamente.",
+  "Room access changed. Refresh and try again.": "O acesso à sala mudou. Atualiza e tenta novamente.",
+  "Email changes require verification and are not available yet.": "A alteração do email exige verificação e ainda não está disponível.",
+  "Your image changed elsewhere. Please try again.": "A tua imagem foi alterada noutra sessão. Tenta novamente.",
+  "Choose a deadline within the next 30 days.": "Escolhe uma data de fim nos próximos 30 dias.",
+  "Use JSON for this request.": "Envia este pedido no formato JSON.",
+  "Registration is temporarily unavailable. Please try again later.": "O registo está temporariamente indisponível. Tenta novamente mais tarde.",
+  "Complete the security check and try again.": "Conclui a verificação de segurança e tenta novamente.",
+  "Security check is temporarily unavailable. Please try again.": "A verificação de segurança está temporariamente indisponível. Tenta novamente.",
+  "Choose an image no larger than 2048 pixels and 4 megapixels.": "Escolhe uma imagem até 2048 píxeis de largura e altura e 4 megapíxeis.",
+  "Service is busy. Please try again shortly.": "O serviço está ocupado. Tenta novamente dentro de momentos.",
+  "Too many requests. Please wait and try again.": "Demasiados pedidos. Aguarda e tenta novamente.",
+  "Enter your password to confirm this action.": "Introduz a tua palavra-passe para confirmar esta ação.",
+  "Verification could not load. Try again.": "Não foi possível carregar a verificação. Tenta novamente.",
+  "Account creation is temporarily unavailable. Please try again later.": "A criação de contas está temporariamente indisponível. Tenta novamente mais tarde.",
+  "Manage your name and profile photo.": "Gere o teu nome e a tua fotografia de perfil.",
+  "Email changes are unavailable until email verification is supported.": "A alteração do email está indisponível enquanto não existir verificação de email.",
+  "Confirm your password to delete your account.": "Confirma a tua palavra-passe para eliminar a conta.",
   "Better plans start with a little yes.":
     "Os melhores planos começam com um sim.",
   "Bring everyone into the decision. Then get to the fun part.":

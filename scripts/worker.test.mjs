@@ -1,25 +1,27 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
-import ts from "typescript";
+import { build } from "esbuild";
 
-const source = await readFile(
-  new URL("../src/index.ts", import.meta.url),
-  "utf8",
-);
-const { outputText } = ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.ESNext,
-    target: ts.ScriptTarget.ES2022,
-  },
+const { outputFiles } = await build({
+  entryPoints: [fileURLToPath(new URL("../src/index.ts", import.meta.url))],
+  bundle: true, write: false, format: "esm", platform: "node", target: "es2022",
 });
 const { default: worker } = await import(
-  `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`
+  `data:text/javascript;base64,${Buffer.from(outputFiles[0].contents).toString("base64")}`
 );
 
 function environment() {
   const calls = { assets: [], writes: [], objects: [] };
   const env = {
+    ABUSE_LIMITER: {
+      idFromName: key => key,
+      get: () => ({ fetch: async () => Response.json({ allowed: true, retryAfter: 0 }) }),
+    },
+    ROOM_REALTIME: {
+      idFromName: key => key,
+      get: () => ({ fetch: async () => new Response(null, { status: 204 }) }),
+    },
     ASSETS: {
       async fetch(request) {
         calls.assets.push(request.url);
@@ -129,7 +131,7 @@ test("API errors retain readable messages and stable codes without falling throu
   const invalid = await worker.fetch(
     new Request("https://example.test/api/auth/signup", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", origin: "https://example.test" },
       body: "{}",
     }),
     env,
@@ -166,6 +168,7 @@ test("an authenticated member can explicitly clear a vote without inserting a ne
       method: "PUT",
       headers: {
         cookie: "yn_session=test-session",
+        origin: "https://example.test",
         "content-type": "application/json",
       },
       body: JSON.stringify({ value: 0 }),

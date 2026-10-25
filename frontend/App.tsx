@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useI18n, translateError } from "./i18n";
 import { LegalPage } from "./legal";
+import { Turnstile } from "./Turnstile";
 
 const durationOptions = [
   ["15", "15 minutes · quick pick"],
@@ -85,6 +86,7 @@ class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public retryAfter = 0,
   ) {
     super(message);
   }
@@ -125,6 +127,7 @@ async function api<T = Record<string, unknown>>(
     throw new ApiError(
       value.error || "Something went wrong. Please try again.",
       response.status,
+      Math.max(0, Number(response.headers.get("retry-after")) * 1000 || Date.parse(response.headers.get("retry-after") || "") - Date.now() || 0),
     );
   return value as T;
 }
@@ -458,9 +461,27 @@ export default function App() {
     const version = ++requestVersion.current;
     let alive = true,
       inFlight = false;
+    let socket: WebSocket | undefined, reconnect: ReturnType<typeof setTimeout> | undefined,
+      debounce: ReturnType<typeof setTimeout> | undefined, ending: ReturnType<typeof setTimeout> | undefined;
+    let blocked = false, failures = 0, retryAt = 0, refreshPending = false, lastSnapshot = 0;
+    const stopSocket = () => { clearTimeout(reconnect); reconnect = undefined; if (socket) { socket.onclose = null; socket.close(); socket = undefined; } };
     const load = async (initial = false) => {
-      if (inFlight || (!initial && (document.hidden || busyRef.current)))
+      if (!alive) return;
+      if (!initial && document.hidden) { refreshPending = true; return; }
+      if (Date.now() < retryAt) {
+        refreshPending = true;
+        clearTimeout(debounce);
+        debounce = setTimeout(() => void load(), Math.max(500, retryAt - Date.now()));
         return;
+      }
+      if (inFlight) { refreshPending = true; return; }
+      if (!initial && busyRef.current) {
+        refreshPending = true;
+        clearTimeout(debounce);
+        debounce = setTimeout(() => void load(), 500);
+        return;
+      }
+      refreshPending = false;
       inFlight = true;
       const mutation = mutationVersion.current;
       if (initial) setLoading(true);
@@ -477,9 +498,17 @@ export default function App() {
             ) {
               setRoom(result);
               setPreview(null);
-            }
+              lastSnapshot = Date.now();
+              blocked = false;
+              clearTimeout(ending);
+              if (result.status === "open" && result.ends_at > Date.now())
+                ending = setTimeout(() => void load(), Math.min(2_147_000_000, result.ends_at - Date.now() + 100));
+              connect();
+            } else if (alive && version === requestVersion.current) refreshPending = true;
           } catch (e) {
             if ((e as ApiError).status === 403) {
+              blocked = true;
+              stopSocket();
               const result = await api<{ room: Preview }>(
                 "/api/rooms/" + encodeURIComponent(code) + "/preview",
               );
@@ -490,7 +519,7 @@ export default function App() {
               ) {
                 setPreview(result.room);
                 setRoom(null);
-              }
+              } else if (alive && version === requestVersion.current) refreshPending = true;
             } else throw e;
           }
         } else {
@@ -502,9 +531,15 @@ export default function App() {
           ) {
             setRooms(result.rooms);
             setRoomsLoaded(true);
-          }
+          } else if (alive && version === requestVersion.current) refreshPending = true;
         }
       } catch (e) {
+        const status = (e as ApiError).status;
+        if ([401, 403, 404].includes(status)) { blocked = true; stopSocket(); }
+        if (status === 429 || status === 0 || status >= 500) {
+          failures = Math.min(failures + 1, 6);
+          retryAt = Date.now() + Math.max((e as ApiError).retryAfter || 0, Math.min(300_000, 30_000 * 2 ** (failures - 1)));
+        }
         if (
           alive &&
           version === requestVersion.current &&
@@ -524,17 +559,55 @@ export default function App() {
       } finally {
         inFlight = false;
         if (alive && version === requestVersion.current) setLoading(false);
+        if (refreshPending && alive) {
+          refreshPending = false;
+          clearTimeout(debounce);
+          debounce = setTimeout(() => void load(), 500);
+        }
       }
     };
+    const connect = () => {
+      if (!alive || !code || blocked || document.hidden || socket || reconnect || Date.now() < retryAt) return;
+      const url = new URL("/api/rooms/" + encodeURIComponent(code) + "/events", location.href);
+      url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(url);
+      socket.onopen = () => { failures = 0; void load(); };
+      socket.onmessage = (event) => {
+        try {
+          if (JSON.parse(event.data).type !== "room-changed") return;
+          clearTimeout(debounce);
+          debounce = setTimeout(() => void load(), 200);
+        } catch { /* Ignore unknown messages. */ }
+      };
+      socket.onclose = (event) => {
+        socket = undefined;
+        if (!alive || document.hidden) return;
+        if ([1008, 4001, 4003, 4004, 4401, 4403, 4404].includes(event.code)) {
+          blocked = true;
+          void load();
+          return;
+        }
+        failures = Math.min(failures + 1, 8);
+        const delay = Math.max(retryAt - Date.now(), Math.min(60_000, 1000 * 2 ** failures) * (0.75 + Math.random() * 0.5));
+        reconnect = setTimeout(() => { reconnect = undefined; void load(); connect(); }, delay);
+      };
+    };
     void load(true);
-    const timer = setInterval(() => void load(), 7000);
+    const timer = setInterval(() => {
+      // Occasional reconciliation also recovers a notification lost after a committed write.
+      if (!blocked && (!code || socket?.readyState !== WebSocket.OPEN || Date.now() - lastSnapshot >= 120_000)) void load();
+    }, code ? 30_000 : 60_000);
     const visible = () => {
-      if (!document.hidden) void load();
+      if (document.hidden) stopSocket();
+      else { void load(); if (!blocked) connect(); }
     };
     document.addEventListener("visibilitychange", visible);
     return () => {
       alive = false;
       clearInterval(timer);
+      clearTimeout(debounce);
+      clearTimeout(ending);
+      stopSocket();
       document.removeEventListener("visibilitychange", visible);
     };
   }, [user?.id, boot, route, locale]);
@@ -681,6 +754,7 @@ export default function App() {
   else if (!user && (route === "/login" || route === "/signup"))
     content = (
       <AuthPage
+        locale={locale}
         signup={route === "/signup"}
         t={t}
         busy={busy}
@@ -752,7 +826,7 @@ export default function App() {
             notify(t("Profile photo updated."));
           })
         }
-        remove={() =>
+        remove={(password) =>
           ask(
             t("Delete your account?"),
             t(
@@ -760,7 +834,7 @@ export default function App() {
             ),
             t("Delete account"),
             async () => {
-              await api("/api/account", "DELETE");
+              await api("/api/account", "DELETE", { password });
               setUser(null);
               setRooms([]);
               setIdeaDrafts({});
@@ -1624,6 +1698,7 @@ function countdown(ms: number) {
 }
 type Link = (path: string, label: ReactNode, className?: string) => ReactNode;
 function AuthPage({
+  locale,
   signup,
   t,
   busy,
@@ -1631,6 +1706,7 @@ function AuthPage({
   next,
   onSubmit,
 }: {
+  locale: string;
   signup: boolean;
   t: T;
   busy: boolean;
@@ -1640,6 +1716,20 @@ function AuthPage({
 }) {
   const [show, setShow] = useState(false),
     [errors, setErrors] = useState<Record<string, string>>({});
+  const [config, setConfig] = useState<{ turnstileSiteKey: string | null; signupEnabled: boolean } | null>(null);
+  const [configFailed, setConfigFailed] = useState(false);
+  const [configAttempt, setConfigAttempt] = useState(0);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [challengeAttempt, setChallengeAttempt] = useState(0);
+  useEffect(() => {
+    if (!signup) return;
+    let active = true;
+    setConfig(null); setConfigFailed(false);
+    void api<{ turnstileSiteKey: string | null; signupEnabled: boolean }>("/api/config")
+      .then(value => { if (active) setConfig(value); })
+      .catch(() => { if (active) setConfigFailed(true); });
+    return () => { active = false; };
+  }, [signup, configAttempt]);
   const form = useRef<HTMLFormElement>(null);
   useEffect(() => {
     setErrors({});
@@ -1648,6 +1738,7 @@ function AuthPage({
   }, [signup]);
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (signup && (!config?.signupEnabled || (config.turnstileSiteKey && !turnstileToken))) return;
     const data = new FormData(e.currentTarget);
     const name = String(data.get("name") || "").trim(),
       email = String(data.get("email") || "").trim(),
@@ -1674,7 +1765,8 @@ function AuthPage({
       email,
       password,
       ageConfirmed: !!data.get("ageConfirmed"),
-    });
+      turnstileToken: signup ? turnstileToken : undefined,
+    }).finally(() => { if (signup) { setTurnstileToken(""); setChallengeAttempt(value => value + 1); } });
   };
   return (
     <section className="auth-page">
@@ -1841,12 +1933,15 @@ function AuthPage({
                   <span>{t("I confirm that I am 18 or older.")}</span>
                 </label>
                 <FieldError id="auth-age-error" message={errors.ageConfirmed} />
+                {config?.turnstileSiteKey && <Turnstile key={challengeAttempt} siteKey={config.turnstileSiteKey} locale={locale} onToken={setTurnstileToken} failure={t("Verification could not load. Try again.")} />}
+                {(configFailed || (config && !config.signupEnabled)) && <p role="status">{t("Account creation is temporarily unavailable. Please try again later.")}</p>}
+                {configFailed && <button type="button" className="text-button" onClick={() => setConfigAttempt(value => value + 1)}>{t("Try again")}</button>}
               </>
             )}
             <button
               className="button auth-submit"
               type="submit"
-              disabled={busy}
+              disabled={busy || (signup && (!config?.signupEnabled || !!config.turnstileSiteKey && !turnstileToken))}
             >
               {t(busy ? "Working…" : signup ? "Create my account" : "Sign in")}{" "}
               <span>↗</span>
@@ -2019,10 +2114,10 @@ function Profile({
   link: Link;
   save: (data: unknown) => Promise<void>;
   photo: (file: File | null) => Promise<void>;
-  remove: () => void;
+  remove: (password: string) => void;
 }) {
   const [name, setName] = useState(user.name),
-    [email, setEmail] = useState(user.email),
+    [password, setPassword] = useState(""),
     [error, setError] = useState("");
   return (
     <div className="page profile-page">
@@ -2030,7 +2125,7 @@ function Profile({
       <p className="eyebrow">{t("Account")}</p>
       <h1>{t("Your profile.")}</h1>
       <p className="muted">
-        {t("Manage your name, email address, and profile photo.")}
+        {t("Manage your name and profile photo.")}
       </p>
       <section className="profile-card">
         <div className="profile-photo-row">
@@ -2085,11 +2180,7 @@ function Profile({
               setError(t("Tell us your name."));
               return;
             }
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-              setError(t("Enter a valid email address."));
-              return;
-            }
-            void save({ name: name.trim(), email: email.trim() });
+            void save({ name: name.trim(), email: user.email });
           }}
         >
           <div className="field">
@@ -2108,12 +2199,14 @@ function Profile({
             <input
               id="profile-email"
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={user.email}
+              readOnly
+              aria-describedby="profile-email-help"
               autoComplete="email"
               maxLength={254}
               required
             />
+            <p id="profile-email-help" className="muted">{t("Email changes are unavailable until email verification is supported.")}</p>
           </div>
           <FieldError message={error} />
           <button className="button" type="submit" disabled={busy}>
@@ -2124,10 +2217,12 @@ function Profile({
       <section className="profile-danger">
         <h2>{t("Delete account")}</h2>
         <p>{t("Permanently delete your account and personal data.")}</p>
+        <div className="field"><label htmlFor="delete-password">{t("Confirm your password to delete your account.")}</label>
+          <input id="delete-password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={e => setPassword(e.target.value)} disabled={busy} /></div>
         <button
           className="button danger-button"
-          disabled={busy}
-          onClick={remove}
+          disabled={busy || !password}
+          onClick={() => { remove(password); setPassword(""); }}
         >
           {t("Delete account")}
         </button>

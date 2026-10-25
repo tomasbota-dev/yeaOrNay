@@ -1,5 +1,11 @@
 # V2 validation record
 
+## Security/realtime verification (25 October 2026)
+
+The current hardening pass adds real workerd tests for concurrent strict admission, retained counters, socket authorization/caps, membership/session revocation and client-message rejection; real D1 tests for concurrent caps, session eviction, bans/closure and transactional rollback; and request-boundary tests for streamed JSON, challenge hostname/action/failure, strict Origin and Retry-After. Provisioning tests cover isolated widget creation/reuse and avoiding secret artifacts. These checks extend rather than replace the historical V2 checks below.
+
+All 33 tests and both local smoke scripts passed, including the HTTP-to-room-socket moderation flow, with the explicitly enabled loopback-only signup bypass. Both staging and production Wrangler dry runs, Worker/frontend TypeScript checks and the dependency audit (zero findings) passed during this pass. Production deployment is not implied by these results. See [the setup/verification guide](public-launch-security.md) for deployed checks and remaining public-launch requirements.
+
 Local verification on 23 October 2026. No remote database migration or deployment was performed during implementation.
 
 ## Automated checks

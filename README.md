@@ -7,9 +7,12 @@ A mobile-first app for making plans together. Create a room, share its code, add
 - React + TypeScript SPA built with Vite in `frontend/`.
 - Workers Static Assets serves `dist/client`; API and image routes use `src/index.ts`.
 - D1 stores accounts, sessions, rooms, ideas, votes, comments, and feedback. R2 stores uploaded images.
+- SQLite Durable Objects enforce atomic abuse limits and coordinate authenticated hibernating room WebSockets. Turnstile protects signup.
 - Explicit English/European Portuguese messages. Legal articles share navigation, language, and theme; their content remains a launch draft with unresolved operator details.
 
 See the [approved study](docs/v2/prototype/README.md), [implementation notes](docs/v2/implementation.md), [ADRs](docs/adr/0001-v2-client-architecture.md), [localization guide](docs/v2/localization.md), and [security review](docs/v2/security.md).
+
+See [security/live-update setup and limits](docs/v2/public-launch-security.md), [ADR 0004](docs/adr/0004-abuse-controls-and-room-realtime.md), and the [changelog](CHANGELOG.md) for current hardening and remaining public-launch requirements. Documentation and changelog updates are required by `AGENTS.md`.
 
 ## Local development
 
@@ -22,6 +25,8 @@ npm run dev
 Wrangler serves frontend/API, normally at `http://localhost:8787`. `predev` builds the SPA. Rebuild after frontend edits, or run `npm run dev:ui` in another terminal for Vite hot reload; it proxies API/media to Wrangler at `127.0.0.1:8787`.
 
 For isolated local staging: `npm run db:staging:local`, then `npm run dev:staging`. Local data stays in ignored `.wrangler/`. Never commit credentials/local environment files.
+
+Signup requires Turnstile configuration. For automated local smoke only, use the explicit loopback-only `LOCAL_TEST_MODE` command in the [operations guide](docs/v2/public-launch-security.md). It is absent from deployment configuration.
 
 ```sh
 npm run build:static
@@ -37,7 +42,7 @@ npx wrangler deploy --env="" --dry-run --outdir dist/production
 
 Signed-out visitors see the landing; signed-in users see their dashboard. Invite paths survive authentication. Rooms support preset/custom future deadlines, images, ideas, comments, vote changes/removal, tied winners, and moderation. Users cannot vote on their own ideas. Hidden tabs pause polling.
 
-Profile contains name, email, photo, and deletion. The account menu contains Profile and Log out. Authentication uses secure HttpOnly cookies. Password recovery and email verification are not implemented.
+Profile contains name, read-only email, photo, and password-confirmed deletion. The account menu contains Profile and Log out. Authentication uses secure HttpOnly cookies. Password recovery and email verification are not implemented; email changes are disabled until ownership verification exists.
 
 `/privacy` and `/terms` share the application shell; legacy `.html` links redirect. Legal drafts retain incomplete operator/contact details. The manifest uses the language-neutral brand; page metadata follows the chosen locale.
 
@@ -66,6 +71,6 @@ PR checks build assets, typecheck both projects, run tests, and dry-run both env
 3. Migrate: apply D1 migrations using resolved configuration.
 4. Deploy: publish `dist/worker/index.js` with `dist/client` assets and resolved config.
 
-Configure GitHub variable `CLOUDFLARE_ACCOUNT_ID` and environment secret `CLOUDFLARE_API_TOKEN` with D1 Edit, Workers R2 Storage Edit, and Workers Scripts Edit permissions. Credentials never enter frontend assets. Database IDs and bucket names identify resources, without granting access.
+Configure GitHub variable `CLOUDFLARE_ACCOUNT_ID` and environment secret `CLOUDFLARE_API_TOKEN` with D1 Edit, Workers R2 Storage Edit, Workers Scripts Edit and Turnstile Sites Write permissions. Actions creates/reuses the selected environment's free signup widget and installs its secret directly in the Worker. If setup is unavailable, signup is disabled and Actions warns; grant the permission and rerun deployment. Credentials never enter frontend assets. Database IDs and bucket names identify resources, without granting access.
 
 Both environments retain daily cleanup. Migrations must remain compatible with the running Worker because they precede deployment. Verify Actions and the real Workers hostname after merging; a push alone is not deployment proof. Static hosting can run without usage charges, but API/D1/R2 usage remains subject to Cloudflare allowances. See [SPA routing](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/).

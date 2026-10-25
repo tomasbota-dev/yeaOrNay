@@ -19,7 +19,9 @@
     }
   ],
   "triggers": {
-    "crons": ["0 3 * * *"]
+    "crons": [
+      "0 3 * * *"
+    ]
   },
   "observability": {
     "enabled": true
@@ -42,7 +44,9 @@
         }
       ],
       "triggers": {
-        "crons": ["0 3 * * *"]
+        "crons": [
+          "0 3 * * *"
+        ]
       },
       "assets": {
         "not_found_handling": "single-page-application",
@@ -56,6 +60,30 @@
         ],
         "binding": "ASSETS",
         "directory": "./dist/client"
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "ROOM_REALTIME",
+            "class_name": "RoomRealtime"
+          },
+          {
+            "name": "ABUSE_LIMITER",
+            "class_name": "AbuseLimiter"
+          }
+        ]
+      },
+      "migrations": [
+        {
+          "tag": "v1-security-realtime",
+          "new_sqlite_classes": [
+            "RoomRealtime",
+            "AbuseLimiter"
+          ]
+        }
+      ],
+      "vars": {
+        "TURNSTILE_SITE_KEY": ""
       }
     }
   },
@@ -71,5 +99,29 @@
     ],
     "binding": "ASSETS",
     "directory": "./dist/client"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOM_REALTIME",
+        "class_name": "RoomRealtime"
+      },
+      {
+        "name": "ABUSE_LIMITER",
+        "class_name": "AbuseLimiter"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-security-realtime",
+      "new_sqlite_classes": [
+        "RoomRealtime",
+        "AbuseLimiter"
+      ]
+    }
+  ],
+  "vars": {
+    "TURNSTILE_SITE_KEY": ""
   }
 }
