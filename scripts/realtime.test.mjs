@@ -62,7 +62,7 @@ test('session revocation and expiration suppress outbound events; client mutatio
     assert.equal(clientClose.code, 1008);
     sockets[2].close(1000);
     await mf.dispatchFetch('https://test/notify', { method: 'POST', headers: { 'x-room-id': 'room' }, body: '{}' });
-    
+
     assert.equal((await closed[0]).code, 4001);
     assert.equal((await closed[1]).code, 4001);
     assert.deepEqual(outbound, []);
@@ -94,20 +94,20 @@ test('room sockets authenticate, cap connections, and revoke access before broad
       sockets.push(socket);
       const initial = new Promise(resolve => socket.addEventListener('message', event => resolve(JSON.parse(event.data)), { once: true }));
       socket.accept();
-      
+
       assert.deepEqual(await initial, { type: 'room-changed' });
     }
     assert.equal((await mf.dispatchFetch('https://test/connect', { headers })).status, 429);
     const message = new Promise(resolve => sockets[0].addEventListener('message', event => resolve(JSON.parse(event.data)), { once: true }));
     assert.equal((await mf.dispatchFetch('https://test/notify', { method: 'POST', headers: { 'x-room-id': 'room' }, body: '{}' })).status, 200);
-    
+
     assert.deepEqual(await message, { type: 'room-changed' });
     await db.exec("DELETE FROM room_members WHERE user_id='user'");
     const closeStarted = Date.now();
     const closed = Promise.all(sockets.map(socket => new Promise(resolve => socket.addEventListener('close', resolve, { once: true }))));
     await mf.dispatchFetch('https://test/notify', { method: 'POST', headers: { 'x-room-id': 'room' }, body: '{}' });
-    
-    
+
+
     for (const event of await closed) assert.equal(event.code, 4001);
     assert.ok(Date.now() - closeStarted < 15_000, 'Server must complete revocation close within 15 seconds');
     assert.equal((await mf.dispatchFetch('https://test/connect', { headers })).status, 403);
