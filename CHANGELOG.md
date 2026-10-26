@@ -4,6 +4,8 @@ Changes are recorded before release. A staging merge does not constitute a produ
 
 ## Unreleased
 
+- Complete English and Portuguese privacy/terms pages for individual operator Asdrubal Correia (Portugal), with privacy/support contact, manual reporting and reconsideration procedures, current security/provider disclosures and batched retention details. Remove unregistered LLC claims and draft placeholders. See docs/legal.md for remaining operator checks.
+
 ### Search discovery
 
 - Set `https://yeaornay.me` as the primary SEO origin and production signup-protection hostname. Canonical/language/social URLs and the sitemap use `.me`; alternate domains and the old Workers hostname remain excluded from indexing. Cloudflare alias redirects and search ownership verification remain external setup steps.
