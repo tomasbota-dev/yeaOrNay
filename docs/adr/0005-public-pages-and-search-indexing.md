@@ -14,6 +14,8 @@ Build ten public pages using React's server renderer at build time: English and 
 
 Use `/en/` and `/pt/` with trailing slashes. Each page supplies an initial title, description, canonical, reciprocal `hreflang` and privacy-safe Open Graph/Twitter text. The production origin and public route manifest live in `shared/seo.ts`. Never derive canonical URLs from request-controlled headers.
 
+The selected primary origin is `https://yeaornay.me`. Production Turnstile provisioning targets this hostname; staging remains separate. Cloudflare redirect rules for `.pt` and `.online` are external setup, preserving paths and query strings. Aliases and the previous Workers hostname are excluded by the exact-origin gate; no cross-domain API redirects are added by the app.
+
 Disable global SPA fallback. Worker-first routes cover public HTML, root, discovery files, internal templates, APIs and media. Unmatched paths reach the Worker because assets use `not_found_handling: none`. Only known private paths receive the app shell; unknown paths return HTTP 404. Hashed JS/CSS/icons keep asset-first delivery.
 
 Indexing requires `SEARCH_INDEXING=enabled` and an exact production-origin match. Staging disables it; absent settings, localhost and previews fail closed. Production robots permits crawling so engines can read private routes' `noindex` headers. Nonproduction robots disallows crawling and its HTML also sends `noindex`. Only production exposes a sitemap, containing the ten public URLs. Legal drafts remain accessible but excluded until operator details are complete.

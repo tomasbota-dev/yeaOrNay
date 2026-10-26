@@ -2,7 +2,11 @@
 
 ## Routes and content
 
-`shared/seo.ts` is the origin/route registry. The production origin is currently `https://yea-or-nay.it-tomasbota.workers.dev`, matching the declared production hostname. `frontend/public-content.ts` holds complete English and European Portuguese copy. `PublicSite.tsx` renders the public shell/guides; `Landing.tsx` is shared with the app's development fallback. `scripts/prerender.mjs` writes ten HTML documents after Vite builds.
+`shared/seo.ts` is the origin/route registry. The primary production origin is `https://yeaornay.me`. Canonical URLs, language alternatives, social URLs, robots and sitemap all use this origin. `frontend/public-content.ts` holds complete English and European Portuguese copy. `PublicSite.tsx` renders the public shell/guides; `Landing.tsx` is shared with the app's development fallback. `scripts/prerender.mjs` writes ten HTML documents after Vite builds.
+
+The production Turnstile provisioning hostname is `yeaornay.me`; Actions adds it to the production widget while preserving existing allowed hostnames. Staging keeps its separate Workers hostname/widget. Confirm signup on the custom domain after production deployment.
+
+Configure Cloudflare permanent redirects from `yeaornay.pt` and `yeaornay.online` (including `www` aliases where used) to `https://yeaornay.me`, preserving paths and query strings. Those external redirect rules are not installed by this PR. Only `.me` is indexable by the application; aliases and the previous production `workers.dev` host fail closed for public indexing and do not expose a sitemap. No automatic cross-domain API redirects are introduced.
 
 Each language has a homepage plus `dinner/`, `movie-night/`, `weekend/` and `how-it-works/`. Guides use fictional examples, accurate account requirements and shipped voting rules. Do not claim anonymous voting, scheduling, reservations, verified restaurant recommendations or unavailable capabilities. Edit both languages together. These pages do not imply measured keyword demand or guaranteed rankings.
 
@@ -45,7 +49,7 @@ Build artifacts still separate `dist/client` from the Worker bundle. No D1 migra
 1. Check successful Actions deployment and the served `/en/`, `/pt/` and one guide. Confirm content in raw HTML, metadata, HTTP 200 and indexable headers. A push/dry run is not deployment proof.
 2. Check production robots and sitemap. Expect exactly ten canonical public URLs without staging/private paths.
 3. Expect HTTP 404 for a random unknown URL. Auth/room invitations must be excluded without exposing room content. Staging public HTML must be excluded and its sitemap unavailable.
-4. Verify ownership using the owner's Google Search Console and Bing Webmaster Tools accounts; submit the production sitemap and inspect rendered public pages. This implementation does not perform account verification/submission. A `workers.dev` subdomain gives no parent-zone DNS control; use an available URL-prefix verification method where applicable. Never invent verification tokens.
+4. Verify `yeaornay.me` using the owner's Google Search Console and Bing Webmaster Tools accounts; submit `https://yeaornay.me/sitemap.xml` and inspect rendered public pages. This implementation does not perform account verification/submission. For a Google Domain property, use the matching Google-issued DNS TXT record in the Cloudflare-managed `.me` zone. No HTML verification tag is needed after successful DNS verification. Never invent verification tokens. Properties for the redirect-only domains are optional for monitoring; each requires its own matching verification.
 5. Review non-brand queries/clicks by page, language and device. Separately measure product activation: room creation, second-member participation, completed decisions and returning organizers. No analytics collection is added; choose measurement/privacy requirements before adding tracking.
 6. Measure mobile Core Web Vitals using available field and lab tools. The rendering architecture does not guarantee a performance score or ranking.
 

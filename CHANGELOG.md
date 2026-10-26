@@ -6,6 +6,8 @@ Changes are recorded before release. A staging merge does not constitute a produ
 
 ### Search discovery
 
+- Set `https://yeaornay.me` as the primary SEO origin and production signup-protection hostname. Canonical/language/social URLs and the sitemap use `.me`; alternate domains and the old Workers hostname remain excluded from indexing. Cloudflare alias redirects and search ownership verification remain external setup steps.
+
 - Prerender English/European Portuguese public homepages and dinner, movie-night, weekend and voting-rules guides, with canonical/language links and social metadata in initial HTML.
 - Separate public rendering from session/API availability; reuse the existing landing design and optional animation/theme controls.
 - Add production-only sitemap and robots policy; exclude account/room/API/media URLs, legal drafts, staging and previews from indexing. Return real 404s for unknown paths.

@@ -1,6 +1,6 @@
 // One production origin for canonical URLs, social metadata and the sitemap.
 // Change this when moving to a custom domain, together with permanent redirects.
-export const publicOrigin = "https://yea-or-nay.it-tomasbota.workers.dev";
+export const publicOrigin = "https://yeaornay.me";
 export const languages = ["en", "pt"] as const;
 export type Language = (typeof languages)[number];
 export const pageIds = ["home", "dinner", "movie-night", "weekend", "how-it-works"] as const;

@@ -6,7 +6,7 @@ import { build } from "esbuild";
 
 const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL("../src/index.ts", import.meta.url))], bundle: true, write: false, platform: "node", format: "esm" });
 const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].contents).toString("base64")}`);
-const production = "https://yea-or-nay.it-tomasbota.workers.dev";
+const production = "https://yeaornay.me";
 const pages = ["", "dinner/", "movie-night/", "weekend/", "how-it-works/"];
 const paths = ["en", "pt"].flatMap(language => pages.map(page => `/${language}/${page}`));
 function environment(setting = "enabled") {
@@ -70,6 +70,9 @@ test("staging, preview hosts, local dev and missing settings fail closed for ind
   for (const [env, origin] of [
     [environment("disabled"), production], [missing, production],
     [environment(), "https://yea-or-nay-staging.it-tomasbota.workers.dev"],
+    [environment(), "https://yea-or-nay.it-tomasbota.workers.dev"],
+    [environment(), "https://yeaornay.pt"], [environment(), "https://yeaornay.online"],
+    [environment(), "https://www.yeaornay.me"],
     [environment(), "http://127.0.0.1:8787"], [environment(), "https://preview.example.test"],
   ]) {
     for (const path of paths) {
@@ -94,7 +97,7 @@ test("production sitemap contains only canonical public pages and robots allows 
   assert.doesNotMatch(xml, /\/room\/|\/profile|\/login|staging|\/privacy|\/terms/);
   const robots = await (await get("/robots.txt")).text();
   assert.match(robots, /Allow: \//);
-  assert.match(robots, /Sitemap: https:\/\/yea-or-nay.it-tomasbota.workers.dev\/sitemap.xml/);
+  assert.match(robots, /Sitemap: https:\/\/yeaornay.me\/sitemap.xml/);
   assert.doesNotMatch(robots, /Disallow: \/room/);
 });
 
@@ -138,4 +141,6 @@ test("both deployment environments route SEO and private responses through the W
   }
   assert.equal(config.vars.SEARCH_INDEXING, "enabled");
   assert.equal(config.env.staging.vars.SEARCH_INDEXING, "disabled");
+  assert.equal(config.vars.TURNSTILE_HOSTNAME, new URL(production).hostname);
+  assert.equal(config.env.staging.vars.TURNSTILE_HOSTNAME, "yea-or-nay-staging.it-tomasbota.workers.dev");
 });
