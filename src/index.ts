@@ -1,5 +1,6 @@
 import { body, HttpError, localTestMode, readImage, signupEnabled, verifySignup } from './security';
 import { consumeLimit } from './abuse';
+import { excludeFromSearch, isAppPath, notFoundPage, seoResponse } from './seo';
 export { AbuseLimiter } from './abuse';
 export { RoomRealtime } from './realtime';
 
@@ -12,6 +13,7 @@ interface Env {
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
   LOCAL_TEST_MODE?: string;
+  SEARCH_INDEXING?: string;
 }
 
 type UserRow = { id: string; email: string; display_name: string; password_hash: string; password_salt: string; avatar_url?: string | null };
@@ -21,7 +23,7 @@ const HASH_ITERATIONS = 100_000;
 const encoder = new TextEncoder();
 
 function json(data: unknown, status = 200, headers: HeadersInit = {}) {
-  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } });
+  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'x-robots-tag': 'noindex, nofollow, noarchive', ...headers } });
 }
 const ERROR_CODES: Record<string, string> = {
   'Email or password didn’t match. Try again.': 'INVALID_CREDENTIALS',
@@ -494,16 +496,35 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const iconPath = new URL(request.url).pathname.match(/^\/room-icons\/([a-f0-9-]{36})$/);
-      if (iconPath && request.method === 'GET') { await limit(env,`media:${request.headers.get('CF-Connecting-IP') || 'unknown'}`,240,60); const object = await env.ICONS.get(iconPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
+      if (iconPath && request.method === 'GET') { await limit(env,`media:${request.headers.get('CF-Connecting-IP') || 'unknown'}`,240,60); const object = await env.ICONS.get(iconPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff','x-robots-tag':'noindex, nofollow, noarchive'}}); }
       const profilePhotoPath = new URL(request.url).pathname.match(/^\/profile-photos\/([a-f0-9-]{36})$/);
-      if (profilePhotoPath && request.method === 'GET') { await limit(env,`media:${request.headers.get('CF-Connecting-IP') || 'unknown'}`,240,60); const object = await env.ICONS.get(profilePhotoPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
+      if (profilePhotoPath && request.method === 'GET') { await limit(env,`media:${request.headers.get('CF-Connecting-IP') || 'unknown'}`,240,60); const object = await env.ICONS.get(profilePhotoPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff','x-robots-tag':'noindex, nofollow, noarchive'}}); }
       const url = new URL(request.url);
-      if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return await apiRoute(request, env);
+      if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return excludeFromSearch(await apiRoute(request, env));
       if (url.pathname === '/privacy.html' || url.pathname === '/terms.html') {
         url.pathname = url.pathname.slice(0, -5);
         return secureAssetResponse(Response.redirect(url.toString(), 308));
       }
-      return secureAssetResponse(await env.ASSETS.fetch(request));
+      const publicResponse = await seoResponse(request, env.ASSETS, env.SEARCH_INDEXING);
+      if (publicResponse) return secureAssetResponse(publicResponse);
+      const path = url.pathname.replace(/\/+$/, '') || '/';
+      if (isAppPath(path) && (request.method === 'GET' || request.method === 'HEAD')) {
+        if (url.pathname !== path) {
+          url.pathname = path;
+          return secureAssetResponse(excludeFromSearch(Response.redirect(url.href, 308)));
+        }
+        const appUrl = new URL('/index.html', url);
+        const asset = await env.ASSETS.fetch(new Request(appUrl, { method: request.method }));
+        const headers = new Headers(asset.headers);
+        headers.set('cache-control', 'no-store');
+        return secureAssetResponse(excludeFromSearch(new Response(asset.body, { status: asset.status, headers })));
+      }
+      // Only real assets may fall through; never turn an unknown URL into SPA HTML.
+      if (path !== '/index.html' && path !== '/public.html') {
+        const asset = await env.ASSETS.fetch(request);
+        if (asset.status !== 404 && !asset.headers.get('content-type')?.includes('text/html')) return secureAssetResponse(excludeFromSearch(asset));
+      }
+      return secureAssetResponse(notFoundPage(request));
     } catch (error) {
       if (error instanceof HttpError) return fail(error.message, error.status, error.retryAfter);
       const message = String(error);

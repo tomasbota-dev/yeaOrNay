@@ -49,14 +49,23 @@
         ]
       },
       "assets": {
-        "not_found_handling": "single-page-application",
+        "not_found_handling": "none",
         "run_worker_first": [
           "/api",
           "/api/*",
           "/room-icons/*",
           "/profile-photos/*",
           "/privacy.html",
-          "/terms.html"
+          "/terms.html",
+          "/",
+          "/index.html",
+          "/public.html",
+          "/en",
+          "/en/*",
+          "/pt",
+          "/pt/*",
+          "/robots.txt",
+          "/sitemap.xml"
         ],
         "binding": "ASSETS",
         "directory": "./dist/client"
@@ -84,19 +93,29 @@
       ],
       "vars": {
         "TURNSTILE_SITE_KEY": "",
-        "TURNSTILE_HOSTNAME": "yea-or-nay-staging.it-tomasbota.workers.dev"
+        "TURNSTILE_HOSTNAME": "yea-or-nay-staging.it-tomasbota.workers.dev",
+        "SEARCH_INDEXING": "disabled"
       }
     }
   },
   "assets": {
-    "not_found_handling": "single-page-application",
+    "not_found_handling": "none",
     "run_worker_first": [
       "/api",
       "/api/*",
       "/room-icons/*",
       "/profile-photos/*",
       "/privacy.html",
-      "/terms.html"
+      "/terms.html",
+      "/",
+      "/index.html",
+      "/public.html",
+      "/en",
+      "/en/*",
+      "/pt",
+      "/pt/*",
+      "/robots.txt",
+      "/sitemap.xml"
     ],
     "binding": "ASSETS",
     "directory": "./dist/client"
@@ -124,6 +143,7 @@
   ],
   "vars": {
     "TURNSTILE_SITE_KEY": "",
-    "TURNSTILE_HOSTNAME": "yea-or-nay.it-tomasbota.workers.dev"
+    "TURNSTILE_HOSTNAME": "yeaornay.me",
+    "SEARCH_INDEXING": "enabled"
   }
 }

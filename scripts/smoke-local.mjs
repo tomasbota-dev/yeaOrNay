@@ -53,7 +53,9 @@ async function account(name) {
 }
 
 for (const route of [
-  "/",
+  "/en/",
+  "/pt/",
+  "/en/dinner/",
   "/login",
   "/signup",
   "/profile",
@@ -69,7 +71,8 @@ for (const route of [
     /script-src 'self'/,
   );
 }
-const shell = (await request("/")).data;
+await request("/", { status: 308 });
+const shell = (await request("/en/")).data;
 const scriptPath = shell.match(/src="([^"]+\.js)"/)?.[1];
 assert.ok(scriptPath, "built shell references its hashed JavaScript");
 const script = await request(scriptPath);

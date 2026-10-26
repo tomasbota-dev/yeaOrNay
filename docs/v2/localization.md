@@ -1,5 +1,7 @@
 # V2 localization plan
 
+Public search pages added on 25 October 2026 use explicit `/en/` and `/pt/` URLs with complete paired records in `frontend/public-content.ts`. The path controls public language, independent of stored/browser preferences. Initial HTML includes language metadata and reciprocal alternatives. Account/legal CTAs carry a supported `lang` parameter, applied by the app before stored preferences. `Landing.tsx` remains covered by dictionary-key localization tests. See [SEO operations](../seo.md).
+
 Security/realtime additions on 25 October 2026 include en-US/pt-PT signup configuration/challenge errors, capacity/rate-limit messages, password-confirmed deletion and immutable-email explanations. The widget receives the selected supported language. Localization tests now inspect `src/security.ts` and `Turnstile.tsx` as well as existing API/UI sources; user-authored room content and protocol message types are not translated.
 
 Status: V2 localization implemented in `frontend/i18n.ts`, with full bilingual legal routes in `frontend/legal.tsx`. The terminology and acceptance checklist below guide review; the error-code contract remains a proposal rather than the current backend response format.

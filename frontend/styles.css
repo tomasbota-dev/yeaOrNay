@@ -6,6 +6,46 @@
   --red: #f5b4a8;
   --line: #c9c7bd;
 }
+.public-category {
+  padding: 14px 4vw 0;
+  color: var(--blue);
+  font-weight: 700;
+}
+.skip { position: absolute; top: -100px; left: 16px; z-index: 100; padding: 12px 18px; background: var(--paper); color: var(--ink); border: 2px solid var(--blue); }
+.skip:focus { top: 12px; }
+.public-category p { margin-bottom: 0; }
+.public-guide, .public-discovery, .public-cta { padding: 64px 4vw; }
+.public-guide { max-width: 1040px; margin: auto; }
+.public-breadcrumb { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 38px; }
+.public-breadcrumb a, .public-guide p a { text-decoration: underline; }
+.public-guide h1 { font-size: clamp(38px, 6vw, 76px); letter-spacing: -.055em; line-height: 1.06; margin: 24px 0; }
+.public-guide h2 { font-size: clamp(23px, 3vw, 32px); letter-spacing: -.035em; }
+.public-intro { max-width: 720px; font-size: 19px; line-height: 1.65; }
+.public-example { margin: 40px 0; padding: 28px; border: 1px solid var(--line); border-left: 5px solid var(--blue); }
+.public-example ul { padding-left: 22px; }
+.public-example li { padding: 8px 0; line-height: 1.6; }
+.public-example p, .public-guide-steps p { line-height: 1.75; }
+.public-example > p:last-child { font-size: 14px; }
+.public-guide-steps { padding-left: 26px; }
+.public-guide-steps > li { padding: 10px 0 20px 12px; }
+.public-guide-steps > li::marker { font-weight: bold; color: var(--blue); }
+.public-discovery { border-top: 1px solid var(--line); }
+.public-discovery > h2, .public-cta h2 { font-size: clamp(30px, 5vw, 56px); letter-spacing: -.05em; max-width: 850px; }
+.public-guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 35px; }
+.public-guide-card { padding: 25px; border: 1px solid var(--line); }
+.public-guide-card:hover { border-color: var(--blue); }
+.public-guide-card h3 { font-size: 24px; line-height: 1.2; margin-top: 0; }
+.public-guide-card p { line-height: 1.65; }
+.public-cta { border-top: 1px solid var(--line); }
+.public-cta p { max-width: 650px; line-height: 1.65; margin-bottom: 25px; }
+.public-header .public-dashboard { font-size: 13px; }
+.public-header .preference span { font-size: 20px; }
+@media (max-width: 700px) {
+  .public-guide, .public-discovery, .public-cta { padding: 40px 6vw; }
+  .public-guide-grid { grid-template-columns: 1fr; }
+  .public-example { padding: 20px; }
+  .public-header .public-dashboard { display: none; }
+}
 * {
   box-sizing: border-box;
 }

@@ -673,6 +673,10 @@ export function normalizeLocale(value: unknown): Locale {
     : "en-US";
 }
 function initialLocale(): Locale {
+  if (typeof location !== "undefined") {
+    const requested = new URLSearchParams(location.search).get("lang");
+    if (requested === "pt-PT" || requested === "en-US") return requested;
+  }
   try {
     const saved = localStorage.getItem("yn_locale");
     if (saved) return normalizeLocale(saved);
