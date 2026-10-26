@@ -1,204 +1,67 @@
 import type { Translate } from "./i18n";
 
-// Full supplied policy text. Missing operator details remain explicit placeholders.
-const privacy = [
-  [
-    "Who is responsible for your data?",
-    "Quem é responsável pelos teus dados?",
-    "YoungAndCapable LLC, of [VALID BUSINESS OR REGISTERED-AGENT ADDRESS REQUIRED], is the controller responsible for personal data processed through Yea or Nay. Contact: [PRIVACY CONTACT EMAIL REQUIRED]. LLC jurisdiction: [STATE / COUNTRY OF FORMATION REQUIRED].",
-    "A YoungAndCapable LLC, com sede em [É NECESSÁRIO UM ENDEREÇO COMERCIAL OU DE AGENTE REGISTADO VÁLIDO], é a responsável pelo tratamento dos dados pessoais através do Yea or Nay. Contacto: [É NECESSÁRIO UM E-MAIL DE CONTACTO PARA PRIVACIDADE]. Jurisdição da LLC: [É NECESSÁRIO INDICAR O ESTADO / PAÍS DE CONSTITUIÇÃO].",
-  ],
-  [
-    "What we process and why",
-    "Que dados tratamos e porquê",
-    "Core account and room processing is needed to provide the service you request. Security processing and optional feedback rely on the publisher’s legitimate interests, subject to applicable law. We do not currently send email, offer password reset, run advertising or use analytics.",
-    "O tratamento dos dados essenciais das contas e salas é necessário para prestar o serviço que solicitas. O tratamento para segurança e a opinião facultativa baseiam-se nos interesses legítimos do prestador, nos termos da legislação aplicável. Atualmente, não enviamos e-mails, não disponibilizamos recuperação de palavra-passe, não apresentamos publicidade nem utilizamos ferramentas de análise.",
-  ],
-  [
-    "Cookies and local storage",
-    "Cookies e armazenamento local",
-    "The service uses an essential, secure, HTTP-only session cookie to keep you signed in. Theme and language choices are stored in your browser’s local storage. They are not used for advertising or cross-site tracking.",
-    "O serviço utiliza um cookie de sessão essencial, seguro e apenas acessível por HTTP para manter a sessão iniciada. As preferências de tema e idioma são guardadas no armazenamento local do teu navegador. Não são utilizadas para publicidade nem para acompanhamento entre sites.",
-  ],
-  [
-    "Service providers and international processing",
-    "Prestadores de serviços e tratamento internacional",
-    "Cloudflare provides the Worker application hosting, database and object storage used by the service. Provider infrastructure may process information in multiple locations. [CONFIRM THE APPLICABLE CLOUDFLARE TERMS, PROCESSING LOCATIONS, AND TRANSFER SAFEGUARDS BEFORE LAUNCH.] We do not sell personal data.",
-    "A Cloudflare fornece o alojamento da aplicação Worker, a base de dados e o armazenamento de objetos utilizados pelo serviço. A infraestrutura do prestador pode tratar informações em vários locais. [CONFIRMAR OS TERMOS APLICÁVEIS DA CLOUDFLARE, OS LOCAIS DE TRATAMENTO E AS GARANTIAS DE TRANSFERÊNCIA ANTES DO LANÇAMENTO.] Não vendemos dados pessoais.",
-  ],
-  [
-    "How long we keep data",
-    "Durante quanto tempo conservamos os dados",
-    "Sessions expire after 30 days and stale login rate-limit records are deleted within 24 hours. Account data is removed after one year without account activity or when you request account deletion. If other people remain in a room you hosted, the host role is transferred to the earliest remaining member; otherwise the room is deleted. Room content (including ideas, votes, comments, membership and uploaded image) is deleted one year after its voting deadline. Feedback is deleted one year after submission. These schedules are enforced by a daily cleanup job. Some operational logs held by Cloudflare may have separate retention periods; confirm the applicable provider settings before launch.",
-    "As sessões expiram após 30 dias e os registos desatualizados de limitação de tentativas de início de sessão são eliminados no prazo de 24 horas. Os dados da conta são eliminados após um ano sem atividade na conta ou quando solicitas a eliminação da conta. Se houver outras pessoas numa sala de que eras anfitrião, essa função é transferida para o membro que entrou há mais tempo e ainda permanece na sala; caso contrário, a sala é eliminada. O conteúdo das salas (incluindo ideias, votos, comentários, participação e imagem carregada) é eliminado um ano após o prazo da votação. As opiniões são eliminadas um ano após o envio. Estes prazos são aplicados por uma tarefa diária de limpeza. Alguns registos operacionais conservados pela Cloudflare podem ter prazos de conservação diferentes; confirmar as definições aplicáveis do prestador antes do lançamento.",
-  ],
-  [
-    "Your rights",
-    "Os teus direitos",
-    "Depending on where you live, you may have rights to access, correct, delete, restrict or receive a copy of personal data, object to some processing, and complain to your data protection authority. Contact [PRIVACY CONTACT EMAIL REQUIRED] to make a request. We will verify the request and respond within the period required by applicable law. EU users may contact their supervisory authority.",
-    "Consoante o local onde resides, podes ter o direito de aceder, retificar, eliminar, limitar o tratamento ou receber uma cópia dos dados pessoais, opor-te a determinados tratamentos e apresentar uma reclamação à autoridade de proteção de dados. Para fazer um pedido, contacta [É NECESSÁRIO UM E-MAIL DE CONTACTO PARA PRIVACIDADE]. Verificaremos o pedido e responderemos no prazo exigido pela legislação aplicável. Os utilizadores da UE podem contactar a respetiva autoridade de controlo.",
-  ],
-  [
-    "Age requirement",
-    "Idade mínima",
-    "Yea or Nay is intended for adults aged 18 or older. Do not create an account if you are under 18. The operator must still assess how the service is presented and used, and comply with applicable child privacy rules.",
-    "O Yea or Nay destina-se a adultos com 18 ou mais anos. Não cries uma conta se tiveres menos de 18 anos. O operador tem ainda de avaliar a forma como o serviço é apresentado e utilizado e cumprir as regras aplicáveis à privacidade de menores.",
-  ],
-  [
-    "Changes and contact",
-    "Alterações e contacto",
-    "We will update this notice when our practices change and show the current date above. Privacy questions: [PRIVACY CONTACT EMAIL REQUIRED].",
-    "Atualizaremos este aviso quando as nossas práticas mudarem e indicaremos a data atual acima. Questões de privacidade: [É NECESSÁRIO UM E-MAIL DE CONTACTO PARA PRIVACIDADE].",
-  ],
+const contact = "newxgames0@gmail.com";
+type Section = [string, string, string, string];
+const privacy: Section[] = [
+  ["Who is responsible?", "Quem é responsável?",
+    `Yea or Nay is operated by Asdrubal Correia, an individual based in Portugal and the controller of personal data used by this service. Contact for privacy, support and reports: ${contact}.`,
+    `O Yea or Nay é operado por Asdrubal Correia, pessoa singular em Portugal e responsável pelo tratamento dos dados pessoais utilizados pelo serviço. Contacto para privacidade, apoio e denúncias: ${contact}.`],
+  ["Data and purposes", "Dados e finalidades",
+    "We process your name, email, password hash and salt, sessions and account activity to provide and secure your account; room titles, deadlines, membership, ideas, votes, comments and images to run group decisions; and optional feedback to improve the service. Providing account and room functions is necessary to perform our agreement with you. Security, abuse prevention and service improvement rely on our legitimate interests, balanced against your rights. We do not sell personal data, run advertising or use audience analytics. Email ownership is not verified and password recovery is not available.",
+    "Tratamos o nome, e-mail, hash e salt da palavra-passe, sessões e atividade da conta para disponibilizar e proteger a conta; títulos, prazos, participantes, ideias, votos, comentários e imagens das salas para permitir decisões em grupo; e opiniões facultativas para melhorar o serviço. As funcionalidades de conta e sala são necessárias para executar o nosso acordo contigo. A segurança, prevenção de abusos e melhoria do serviço baseiam-se nos nossos interesses legítimos, ponderados face aos teus direitos. Não vendemos dados pessoais, não apresentamos publicidade nem utilizamos análise de audiências. A titularidade do e-mail não é verificada e não existe recuperação de palavra-passe."],
+  ["Who can see your content?", "Quem pode ver os teus conteúdos?",
+    "Room members can see room content and your displayed profile. Anyone with a room link or code can attempt to join, subject to access restrictions. Room images and profile photos are publicly accessible to anyone with their image URL and may be cached for up to one hour after removal. Do not upload sensitive or confidential images. Account deletion removes your profile, ideas, votes, comments and memberships; rooms with other members can continue under a new host.",
+    "Os membros podem ver os conteúdos da sala e o teu perfil apresentado. Qualquer pessoa com a ligação ou código de uma sala pode tentar entrar, sujeita às restrições de acesso. As imagens das salas e fotografias de perfil são acessíveis publicamente a quem tiver o respetivo URL e podem permanecer em cache até uma hora após a remoção. Não carregues imagens sensíveis ou confidenciais. A eliminação da conta remove o perfil, ideias, votos, comentários e participações; as salas com outros membros podem continuar com um novo anfitrião."],
+  ["Cookies and security", "Cookies e segurança",
+    "An essential Secure, HttpOnly session cookie keeps you signed in for up to 30 days. Local storage remembers your language and theme. Cloudflare Turnstile protects signup and processes technical browser, device and network signals, including IP address, to detect automated abuse. Our abuse controls use hashed identifiers derived from IP addresses, emails and accounts with expiring counters; these identifiers are pseudonymous, not anonymous. Cloudflare may also process request metadata and security or diagnostic logs. These technologies protect the service rather than track advertising activity.",
+    "Um cookie essencial Secure e HttpOnly mantém a sessão iniciada durante até 30 dias. O armazenamento local guarda o idioma e tema. O Cloudflare Turnstile protege o registo e trata sinais técnicos do navegador, dispositivo e rede, incluindo o endereço IP, para detetar abusos automatizados. Os nossos controlos de abuso utilizam identificadores derivados por hash de endereços IP, e-mails e contas, com contadores que expiram; estes identificadores são pseudónimos, não anónimos. A Cloudflare pode também tratar metadados dos pedidos e registos de segurança ou diagnóstico. Estas tecnologias protegem o serviço e não acompanham atividade publicitária."],
+  ["Providers and international processing", "Prestadores e tratamento internacional",
+    "Cloudflare supplies hosting, database, image storage, security and Turnstile services. Processing may take place outside Portugal and the European Economic Area. Cloudflare’s published data processing terms provide for standard contractual clauses and other applicable safeguards for restricted transfers. Its Turnstile Privacy Addendum describes its processing of challenge data, including processing as an independent controller to improve bot detection. Emails you send to our Gmail contact are also handled by Google under its applicable terms. We may disclose information when required by law or necessary to address abuse and protect rights.",
+    "A Cloudflare fornece alojamento, base de dados, armazenamento de imagens, segurança e Turnstile. O tratamento pode ocorrer fora de Portugal e do Espaço Económico Europeu. Os termos de tratamento de dados publicados pela Cloudflare preveem cláusulas contratuais-tipo e outras garantias aplicáveis às transferências sujeitas a restrições. A Adenda de Privacidade do Turnstile descreve o tratamento dos dados dos desafios, incluindo o tratamento como responsável independente para melhorar a deteção de bots. Os e-mails enviados para o nosso contacto Gmail são também tratados pela Google segundo os termos aplicáveis. Podemos divulgar informações quando exigido por lei ou necessário para responder a abusos e proteger direitos."],
+  ["Retention and deletion", "Conservação e eliminação",
+    "Sessions expire after 30 days. Account data is eligible for deletion after one year without authenticated activity, or when you delete your account using your current password. If a hosted room still has members, hosting transfers to the earliest remaining member; otherwise the room is deleted. Room content is eligible for deletion one year after the voting deadline, and feedback one year after submission. Daily cleanup processes expired data in batches, so deletion may take additional runs. Abuse counters expire with their policy windows; legacy login-attempt records are cleaned after 24 hours. Provider logs and recovery copies follow the provider settings and lifecycle, so deleting live data does not promise immediate erasure of every recovery copy. Support correspondence is kept only as needed to resolve the request and meet applicable legal obligations.",
+    "As sessões expiram após 30 dias. Os dados da conta ficam sujeitos a eliminação após um ano sem atividade autenticada, ou quando eliminas a conta com a palavra-passe atual. Se uma sala que criaste ainda tiver membros, a função de anfitrião passa para o membro mais antigo que permanece; caso contrário, a sala é eliminada. Os conteúdos das salas ficam sujeitos a eliminação um ano após o prazo da votação e as opiniões um ano após o envio. A limpeza diária processa os dados expirados por lotes, pelo que a eliminação pode exigir execuções adicionais. Os contadores de abuso expiram com as respetivas janelas; os registos antigos de tentativas de início de sessão são limpos após 24 horas. Os registos e cópias de recuperação dos prestadores seguem as respetivas definições e ciclos de vida; eliminar dados ativos não garante a eliminação imediata de todas as cópias de recuperação. A correspondência de apoio é conservada apenas enquanto necessária para resolver o pedido e cumprir obrigações legais aplicáveis."],
+  ["Your rights and complaints", "Os teus direitos e reclamações",
+    `Where applicable, you can request access, correction, deletion, restriction or portability of your data, and object to processing based on legitimate interests. Write to ${contact}; we may request proportionate information to verify your identity. We normally respond within one month, with any lawful extension explained to you. You can complain to Portugal’s Comissão Nacional de Proteção de Dados (CNPD) or another competent supervisory authority without first contacting us.`,
+    `Quando aplicável, podes pedir acesso, retificação, eliminação, limitação ou portabilidade dos dados e opor-te ao tratamento baseado em interesses legítimos. Escreve para ${contact}; podemos pedir informações proporcionais para verificar a tua identidade. Respondemos normalmente no prazo de um mês e explicaremos qualquer prorrogação legal. Podes reclamar junto da Comissão Nacional de Proteção de Dados (CNPD) em Portugal ou de outra autoridade competente sem nos contactar primeiro.`],
+  ["Age and changes", "Idade e alterações",
+    `The service is for adults aged 18 or older. If you believe a child has supplied personal data, contact ${contact}. We publish changes to this notice here with an updated date and provide additional notice where legally required.`,
+    `O serviço destina-se a adultos com 18 ou mais anos. Se considerares que um menor forneceu dados pessoais, contacta ${contact}. Publicamos aqui as alterações a este aviso com uma data atualizada e prestamos informação adicional quando legalmente exigido.`],
 ];
-const processed = [
-  [
-    "Account name, email address, password hash and salt, and session records, to create accounts, authenticate users and protect accounts.",
-    "Nome da conta, endereço de e-mail, hash e salt da palavra-passe e registos de sessão, para criar contas, autenticar utilizadores e proteger contas.",
-  ],
-  [
-    "Room titles, deadlines, membership, ideas, votes and comments, to operate group decisions.",
-    "Títulos e prazos das salas, participação, ideias, votos e comentários, para permitir decisões em grupo.",
-  ],
-  [
-    "Room images selected or uploaded by the room host, to display the room.",
-    "Imagens das salas selecionadas ou carregadas pelo anfitrião, para apresentar a sala.",
-  ],
-  [
-    "Profile photos uploaded by account holders, to display their profile and identify them in rooms. Room images and profile photos are publicly accessible to anyone who has their image URL.",
-    "Fotografias de perfil carregadas pelos titulares das contas, para apresentar o perfil e identificá-los nas salas. As imagens das salas e as fotografias de perfil são acessíveis publicamente a qualquer pessoa que tenha o respetivo URL.",
-  ],
-  [
-    "Feedback text and rating, when you choose to send feedback, to understand and improve the service.",
-    "Texto e classificação da opinião, quando optas por enviar uma opinião, para compreender e melhorar o serviço.",
-  ],
-  [
-    "A one-way hash derived from request IP address and email for login rate limiting, to detect repeated failed login attempts.",
-    "Um hash irreversível derivado do endereço IP do pedido e do e-mail, para limitar tentativas de início de sessão e detetar tentativas falhadas repetidas.",
-  ],
+const terms: Section[] = [
+  ["Provider and eligibility", "Prestador e condições de utilização",
+    `Yea or Nay is operated by Asdrubal Correia, an individual based in Portugal. Contact: ${contact}. You must be at least 18, provide accurate account details and keep your password private. By using the service, you agree to these terms.`,
+    `O Yea or Nay é operado por Asdrubal Correia, pessoa singular em Portugal. Contacto: ${contact}. Tens de ter pelo menos 18 anos, fornecer dados corretos para a conta e manter a palavra-passe confidencial. Ao utilizar o serviço, aceitas estes termos.`],
+  ["Group decisions", "Decisões em grupo",
+    "The service lets members suggest ideas, vote and comment. Results reflect activity in the app and do not make bookings, purchases or commitments on anyone’s behalf. You are responsible for checking practical details and agreeing plans with other participants. Availability and uninterrupted access are not guaranteed.",
+    "O serviço permite sugerir ideias, votar e comentar. Os resultados refletem a atividade na aplicação e não efetuam reservas, compras ou compromissos em nome de ninguém. Cabe-te verificar os detalhes práticos e combinar os planos com os outros participantes. A disponibilidade e o acesso ininterrupto não são garantidos."],
+  ["Your content and conduct", "Os teus conteúdos e conduta",
+    "You retain your rights in submitted content and give us limited permission to store, display and transmit it to operate and secure the service. Only share content you have permission to share. Do not post unlawful, infringing, threatening or abusive material, expose others’ personal information without permission, impersonate others, distribute malware or bypass access and abuse controls. Share room links and codes carefully: people with them can attempt to join. Uploaded room images and profile photos are public by image URL.",
+    "Manténs os direitos sobre os conteúdos enviados e concedes-nos autorização limitada para os armazenar, apresentar e transmitir para operar e proteger o serviço. Partilha apenas conteúdos que tens autorização para partilhar. Não publiques material ilegal, que viole direitos, ameaçador ou abusivo; não exponhas dados pessoais de terceiros sem autorização, não te faças passar por outras pessoas, não distribuas malware nem contornes controlos de acesso ou abuso. Partilha ligações e códigos de salas com cuidado: quem os tiver pode tentar entrar. As imagens carregadas para salas e perfis são públicas através do respetivo URL."],
+  ["Hosts, reports and review", "Anfitriões, denúncias e análise",
+    `Hosts can end voting, remove members and ban rejoining. To report content or an account concern, email ${contact} with the room link or code, relevant content and an explanation. Do not send passwords. Reports are reviewed by the operator, who may request clarification and take proportionate action, including removing content or restricting access where warranted. Where appropriate and legally permitted, affected users receive reasons and may request reconsideration by replying with further information. Urgent safety or legal requirements may require action before notice. This email is not an emergency service.`,
+    `Os anfitriões podem terminar a votação, remover membros e impedir o seu regresso. Para denunciar conteúdos ou problemas com uma conta, envia um e-mail para ${contact} com a ligação ou código da sala, os conteúdos relevantes e uma explicação. Não envies palavras-passe. As denúncias são analisadas pelo operador, que pode pedir esclarecimentos e tomar medidas proporcionais, incluindo remover conteúdos ou restringir o acesso quando justificado. Quando adequado e legalmente permitido, os utilizadores afetados recebem os motivos e podem pedir uma reavaliação respondendo com informações adicionais. Exigências urgentes de segurança ou legais podem exigir ação antes da notificação. Este e-mail não é um serviço de emergência.`],
+  ["Accounts and retention", "Contas e conservação",
+    "You can delete your account in your profile using your current password. Password recovery and email verification are not available. Inactive accounts and expired room content are subject to the retention and cleanup schedules in the Privacy notice. Rooms with remaining members may continue under a new host after account deletion. Keep your own copies of information you need.",
+    "Podes eliminar a conta no perfil com a palavra-passe atual. Não existe recuperação de palavra-passe nem verificação de e-mail. As contas inativas e os conteúdos expirados das salas estão sujeitos aos prazos de conservação e limpeza do Aviso de privacidade. As salas com membros podem continuar com um novo anfitrião após a eliminação da conta. Guarda cópias das informações de que necessitas."],
+  ["Changes, responsibility and disputes", "Alterações, responsabilidade e litígios",
+    `We may change or discontinue features and will give notice where legally required. Changes to these terms are published here with an updated date. Nothing in these terms excludes liability or limits consumer, privacy or other rights that cannot lawfully be excluded or limited. Disputes are subject to applicable law and the courts competent under that law; these terms do not require you to give up mandatory protections or bring claims exclusively in Portugal. Questions: ${contact}.`,
+    `Podemos alterar ou descontinuar funcionalidades e avisaremos quando legalmente exigido. As alterações a estes termos são publicadas aqui com uma data atualizada. Nada nestes termos exclui responsabilidade ou limita direitos dos consumidores, de privacidade ou outros que não possam ser legalmente excluídos ou limitados. Os litígios estão sujeitos à lei aplicável e aos tribunais competentes segundo essa lei; estes termos não exigem que renuncies a proteções imperativas ou que apresentes ações exclusivamente em Portugal. Questões: ${contact}.`],
 ];
-const terms = [
-  [
-    "Who provides the service?",
-    "Quem presta o serviço?",
-    "Yea or Nay is provided by YoungAndCapable LLC, at [VALID BUSINESS OR REGISTERED-AGENT ADDRESS REQUIRED]. Contact: [SERVICE CONTACT EMAIL REQUIRED]. Formed in [STATE / COUNTRY REQUIRED].",
-    "O Yea or Nay é disponibilizado pela YoungAndCapable LLC, em [É NECESSÁRIO UM ENDEREÇO COMERCIAL OU DE AGENTE REGISTADO VÁLIDO]. Contacto: [É NECESSÁRIO UM E-MAIL DE CONTACTO DO SERVIÇO]. Constituída em [É NECESSÁRIO INDICAR O ESTADO / PAÍS].",
-  ],
-  [
-    "Using Yea or Nay",
-    "Utilizar o Yea or Nay",
-    "You must provide accurate account details, keep your password private and use the service lawfully. You must be at least 18 years old to use the service.",
-    "Deves fornecer dados corretos para a conta, manter a palavra-passe confidencial e utilizar o serviço de forma legal. Tens de ter pelo menos 18 anos para utilizar o serviço.",
-  ],
-  [
-    "Retention and account deletion",
-    "Conservação e eliminação da conta",
-    "Accounts are removed after one year without account activity or on request. Room content is removed one year after its voting deadline. Feedback is removed one year after it is submitted. See the Privacy notice for details.",
-    "As contas são eliminadas após um ano sem atividade na conta ou mediante pedido. O conteúdo das salas é eliminado um ano após o prazo da votação. As opiniões são eliminadas um ano após o envio. Consulta o Aviso de privacidade para mais informações.",
-  ],
-  [
-    "Rooms and user content",
-    "Salas e conteúdos dos utilizadores",
-    "You keep your rights in ideas, comments and images you submit. You give the service a limited permission to store, display and transmit that content as needed to run the rooms you create or join. Room links and codes let others request to join; only share them with people you intend to invite. Do not upload unlawful, infringing, abusive or harmful content, or content you lack permission to share.",
-    "Manténs os teus direitos sobre as ideias, comentários e imagens que envias. Concedes ao serviço uma autorização limitada para armazenar, apresentar e transmitir esses conteúdos na medida necessária ao funcionamento das salas que crias ou em que participas. As ligações e os códigos das salas permitem que outras pessoas peçam para entrar; partilha-os apenas com as pessoas que pretendes convidar. Não carregues conteúdos ilegais, que violem direitos, abusivos ou prejudiciais, nem conteúdos que não tenhas autorização para partilhar.",
-  ],
-  [
-    "Room hosts and reports",
-    "Anfitriões e denúncias",
-    "The host can end voting and remove members from their room. Hosts and users must not use those controls unlawfully or abusively. To report illegal content, abuse or an account concern, contact [REPORT / SUPPORT EMAIL REQUIRED] and include the room link and relevant content. [DEFINE A REVIEW, RESPONSE, RESTRICTION AND APPEAL PROCESS BEFORE PUBLIC LAUNCH.]",
-    "O anfitrião pode terminar a votação e remover membros da sua sala. Os anfitriões e utilizadores não podem usar estes controlos de forma ilegal ou abusiva. Para denunciar conteúdos ilegais, abusos ou problemas com uma conta, contacta [É NECESSÁRIO UM E-MAIL PARA DENÚNCIAS / SUPORTE] e inclui a ligação da sala e os conteúdos relevantes. [DEFINIR UM PROCESSO DE ANÁLISE, RESPOSTA, RESTRIÇÃO E RECURSO ANTES DO LANÇAMENTO PÚBLICO.]",
-  ],
-  [
-    "Service changes and availability",
-    "Alterações e disponibilidade do serviço",
-    "The service is provided without a promise of uninterrupted availability. We may change or discontinue features and will give notice where required by law. We may restrict access where reasonably needed to protect users, the service or others, and will follow applicable notice and appeal requirements.",
-    "O serviço é prestado sem garantia de disponibilidade ininterrupta. Podemos alterar ou descontinuar funcionalidades e comunicaremos essas alterações quando exigido por lei. Podemos restringir o acesso quando tal seja razoavelmente necessário para proteger os utilizadores, o serviço ou terceiros, cumprindo os requisitos aplicáveis de notificação e recurso.",
-  ],
-  [
-    "Liability and governing law",
-    "Responsabilidade e lei aplicável",
-    "Nothing in these terms limits rights or remedies that cannot legally be limited. Any permitted limits on liability, governing law and dispute venue must be set by the publisher with legal advice: [CHOOSE APPLICABLE TERMS WITHOUT OVERRIDING MANDATORY CONSUMER RIGHTS.]",
-    "Nada nestes termos limita direitos ou meios de defesa que não possam ser legalmente limitados. Quaisquer limites de responsabilidade permitidos, a lei aplicável e o foro para litígios devem ser definidos pelo prestador com aconselhamento jurídico: [ESCOLHER TERMOS APLICÁVEIS SEM AFASTAR DIREITOS IMPERATIVOS DOS CONSUMIDORES.]",
-  ],
-  [
-    "Contact and updates",
-    "Contacto e atualizações",
-    "Questions or reports: [SERVICE CONTACT EMAIL]. We will publish changes to these terms here with an updated date.",
-    "Questões ou denúncias: [E-MAIL DE CONTACTO DO SERVIÇO]. Publicaremos aqui as alterações a estes termos com uma data atualizada.",
-  ],
-];
-const privacyDraft = [
-  "The publisher name, age policy and retention schedule below reflect the operator’s current choices. This notice is still incomplete: a real service/privacy contact, valid business or registered-agent address, LLC jurisdiction, and verified Cloudflare transfer details are required. Obtain legal review before public launch.",
-  "O nome do prestador, a política de idade e os prazos de conservação abaixo refletem as escolhas atuais do operador. Este aviso continua incompleto: são necessários um contacto real do serviço/privacidade, um endereço comercial ou de agente registado válido, a jurisdição da LLC e informações verificadas sobre as transferências da Cloudflare. Obtém uma revisão jurídica antes do lançamento público.",
-];
-const termsDraft = [
-  "Publisher name, age policy and retention schedule below reflect current choices. The business address, formation jurisdiction, service contact, complaint process and governing-law choices still need completion and legal review before public launch.",
-  "O nome do prestador, a política de idade e os prazos de conservação abaixo refletem as escolhas atuais. O endereço comercial, a jurisdição de constituição, o contacto do serviço, o processo de reclamação e as opções de lei aplicável ainda precisam de ser preenchidos e revistos juridicamente antes do lançamento público.",
-];
-const summaries = {
-  privacy:
-    "Este aviso explica que dados são usados para criar contas e salas, permitir sugestões, votos e comentários e proteger inícios de sessão. A Cloudflare aloja a aplicação, a base de dados e as imagens das salas. As contas sem atividade de início de sessão durante um ano e o conteúdo das salas um ano após o prazo da votação são eliminados por uma tarefa diária. A aplicação destina-se a pessoas com 18 ou mais anos. O endereço, o contacto e a jurisdição da empresa ainda têm de ser preenchidos. Para exercer direitos, contacta [E-MAIL DE PRIVACIDADE].",
-  terms:
-    "Usa a aplicação de forma legal, mantém os dados da conta seguros e só partilha conteúdos que tens autorização para partilhar. O anfitrião pode terminar a votação e remover membros da sala. Para denunciar conteúdos ou problemas, contacta [E-MAIL DE SUPORTE]. A utilização está limitada a maiores de 18 anos; o conteúdo das salas é eliminado um ano após o prazo de votação. O endereço, a jurisdição e o contacto da empresa ainda têm de ser indicados.",
-};
 
-export function LegalPage({
-  kind,
-  t,
-  locale,
-}: {
-  kind: "privacy" | "terms";
-  t: Translate;
-  locale: string;
-}) {
-  const pt = locale === "pt-PT",
-    rows = kind === "privacy" ? privacy : terms;
-  return (
-    <main className="page legal legal-page">
-      <header className="legal-heading">
-        <p className="eyebrow">
-          {pt ? "Informações do serviço" : "Service information"}
-        </p>
-        <h1>{t(kind === "privacy" ? "Privacy notice" : "Terms of service")}</h1>
-      </header>
-      <aside className="legal-draft" role="note">
-        <strong>
-          {pt
-            ? "Versão preliminar — não está pronta para utilização pública."
-            : "Launch draft — not ready for public use."}
-        </strong>
-        <p>{(kind === "privacy" ? privacyDraft : termsDraft)[pt ? 1 : 0]}</p>
-      </aside>
-      <p>
-        <strong>
-          {pt
-            ? "Última atualização: 21 de outubro de 2026"
-            : "Last updated: 21 October 2026"}
-        </strong>
-      </p>
-      <div className="legal-content">
-        {rows.map((row, index) => (
-          <section key={row[0]}>
-            <h2>{row[pt ? 1 : 0]}</h2>
-            {kind === "privacy" && index === 1 && (
-              <ul>
-                {processed.map((item) => (
-                  <li key={item[0]}>{item[pt ? 1 : 0]}</li>
-                ))}
-              </ul>
-            )}
-            <p>{row[pt ? 3 : 2]}</p>
-            {kind === "terms" && index === 2 && (
-              <a href="/privacy">{t("Privacy notice")} →</a>
-            )}
-          </section>
-        ))}
-      </div>
-      <hr />
-      <p lang="pt-PT">
-        <strong>Resumo em português: </strong>
-        {summaries[kind]}
-      </p>
-    </main>
-  );
+export function LegalPage({ kind, t, locale }: { kind: "privacy" | "terms"; t: Translate; locale: string }) {
+  const pt = locale === "pt-PT";
+  return <main className="page legal legal-page">
+    <header className="legal-heading"><p className="eyebrow">{pt ? "Informações do serviço" : "Service information"}</p><h1>{t(kind === "privacy" ? "Privacy notice" : "Terms of service")}</h1></header>
+    <p><strong>{pt ? "Última atualização: 26 de outubro de 2026" : "Last updated: 26 October 2026"}</strong></p>
+    <p>{pt ? "Contacto: " : "Contact: "}<a href={`mailto:${contact}`}>{contact}</a></p>
+    <div className="legal-content">{(kind === "privacy" ? privacy : terms).map(row => <section key={row[0]}><h2>{row[pt ? 1 : 0]}</h2><p>{row[pt ? 3 : 2]}</p></section>)}</div>
+    {kind === "privacy" && <section><h2>{pt ? "Informações adicionais" : "Further information"}</h2><ul>
+      <li><a href="https://www.cloudflare.com/cloudflare-customer-dpa/">{pt ? "Termos de tratamento de dados da Cloudflare" : "Cloudflare data processing terms"}</a></li>
+      <li><a href="https://www.cloudflare.com/turnstile-privacy-policy/">{pt ? "Adenda de Privacidade do Turnstile" : "Turnstile Privacy Addendum"}</a></li>
+      <li><a href="https://policies.google.com/privacy">{pt ? "Privacidade da Google (contacto por e-mail)" : "Google privacy (email contact)"}</a></li>
+      <li><a href="https://www.cnpd.pt/">{pt ? "Comissão Nacional de Proteção de Dados" : "Portuguese data protection authority (CNPD)"}</a></li>
+    </ul></section>}
+    <p><a href={kind === "privacy" ? "/terms" : "/privacy"}>{t(kind === "privacy" ? "Terms of service" : "Privacy notice")} →</a></p>
+  </main>;
 }
