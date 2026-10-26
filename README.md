@@ -1,80 +1,77 @@
 # Yea or Nay
 
-A tiny, mobile-first way for friends and family to pick a plan together. Create a room, share its code, gather ideas, vote, and see the winner when the timer ends.
+A mobile-first app for making plans together. Create a room, share its code, add ideas, vote Yea or Nay, and see the result when voting ends.
 
-## What it does
+## V2 architecture
 
-- Email/password signup and login with secure, expiring HttpOnly sessions
-- Create rooms with 15-minute, 30-minute, 1-hour, 3-hour, or 24-hour voting windows
-- Join by an easy-to-share room code
-- Add ideas and optional details
-- Upvote or downvote other people’s ideas; you cannot vote on your own
-- Comment on ideas
-- Room updates every five seconds while open
-- The host can end voting early; otherwise the first request after the deadline closes voting
-- The highest-scoring idea wins. Tied ideas share the win.
-- Mobile-responsive layout, app icon, and browser theme colors
+- React + TypeScript SPA built with Vite in `frontend/`.
+- Prerendered English/Portuguese public homepages and planning guides; private application remains a SPA. See the [SEO launch guide](docs/seo.md) and [ADR 0005](docs/adr/0005-public-pages-and-search-indexing.md).
+- Workers Static Assets serves `dist/client`; API and image routes use `src/index.ts`.
+- D1 stores accounts, sessions, rooms, ideas, votes, comments, and feedback. R2 stores uploaded images.
+- SQLite Durable Objects enforce atomic abuse limits and coordinate authenticated hibernating room WebSockets. Turnstile protects signup.
+- Explicit English/European Portuguese messages. Legal articles share navigation, language, and theme; their content remains a launch draft with unresolved operator details.
 
-## Stack
+See the [approved study](docs/v2/prototype/README.md), [implementation notes](docs/v2/implementation.md), [ADRs](docs/adr/0001-v2-client-architecture.md), [localization guide](docs/v2/localization.md), and [security review](docs/v2/security.md).
 
-- Static HTML, CSS, and JavaScript served by one Cloudflare Worker
-- Cloudflare D1 (SQLite) for accounts, rooms, ideas, votes, and comments
-- No client-side framework, realtime service, email provider, or paid API
-
-The whole app is a single small Worker bundle to keep deployment simple. Page assets are also served by the Worker, so they use the Workers request allowance; active rooms poll every five seconds. This is sized for small friend and family groups.
+See [security/live-update setup and limits](docs/v2/public-launch-security.md), [ADR 0004](docs/adr/0004-abuse-controls-and-room-realtime.md), and the [changelog](CHANGELOG.md) for current hardening and remaining public-launch requirements. Documentation and changelog updates are required by `AGENTS.md`.
 
 ## Local development
 
 ```sh
-npm install
+npm ci
 npm run db:local
 npm run dev
 ```
 
-Open the URL printed by Wrangler (usually `http://localhost:8787`). Local data lives under `.wrangler/` and is ignored by Git.
+Wrangler serves frontend/API, normally at `http://localhost:8787`. `predev` builds the SPA. Rebuild after frontend edits, or run `npm run dev:ui` in another terminal for Vite hot reload; it proxies API/media to Wrangler at `127.0.0.1:8787`.
+
+For isolated local staging: `npm run db:staging:local`, then `npm run dev:staging`. Local data stays in ignored `.wrangler/`. Never commit credentials/local environment files.
+
+Signup requires Turnstile configuration. For automated local smoke only, use the explicit loopback-only `LOCAL_TEST_MODE` command in the [operations guide](docs/v2/public-launch-security.md). It is absent from deployment configuration.
+
+```sh
+npm run build:static
+npm run typecheck
+npm test
+npx wrangler deploy --env staging --dry-run --outdir dist/staging
+npx wrangler deploy --env="" --dry-run --outdir dist/production
+```
+
+`build:static` generates Vite assets and prerenders public pages. `npm run build` is an alias. Worker/DOM TypeScript configs are separate. Deploy frontend assets and Worker together. SEO tests inspect generated HTML, so build before running the suite.
+
+## Product behavior
+
+Signed-out visitors at `/` are redirected to `/en/` (or `/pt/` with `?lang=pt-PT`); session-cookie holders are redirected to the authenticated dashboard. Public pages do not depend on session APIs. Invite paths survive authentication. Rooms support preset/custom future deadlines, images, ideas, comments, vote changes/removal, tied winners, and moderation. Users cannot vote on their own ideas. Hidden tabs pause live connections.
+
+Profile contains name, read-only email, photo, and password-confirmed deletion. The account menu contains Profile and Log out. Authentication uses secure HttpOnly cookies. Password recovery and email verification are not implemented; email changes are disabled until ownership verification exists.
+
+`/privacy` and `/terms` share the application shell; legacy `.html` links redirect. Legal drafts retain incomplete operator/contact details. The manifest uses the language-neutral brand; page metadata follows the chosen locale.
 
 ## Branches and releases
 
-Start every change from the latest origin/staging on a feature/<description> or bugfix/<description> branch. Open a PR into staging. After the required Branch policy and Validate application checks pass, merge to deploy staging. Test staging, then open a PR from staging into main to release production.
+Start from current `origin/staging` on `feature/*` or `bugfix/*`. Open a PR into `staging`; required policy/application checks precede merging. Squash merge deploys staging. Promote through a same-repository `staging` → `main` PR, also using a squash merge. Squash is the only enabled merge method. Never push directly to protected branches.
 
-Use merge commits for release PRs to preserve shared history. Keep staging after releases. Both branches require PRs and checks, including for administrators. Direct pushes, force pushes, and branch deletion are blocked. See AGENTS.md for contributor instructions.
+Squashed promotions do not preserve shared commit ancestry, so earlier commits may reappear in later promotion PR histories. Review the actual file diff and validate each release. Keep staging; never reset or force-push it to align histories.
 
-## Cloudflare environments
+Actions deletes merged feature/bugfix branches only. Keep repository-wide automatic branch deletion disabled so `staging` survives releases.
 
-Merged `feature/*` and `bugfix/*` branches in this repository are automatically deleted by the branch cleanup workflow. Closed, unmerged PRs and branches with newer commits are left alone. Other branch names, including `staging` and `main`, are never deleted by this workflow. Repository-wide automatic branch deletion stays disabled so release PRs preserve `staging`.
+## Cloudflare environments and CI
 
-| Resource | Production (main) | Staging (staging) |
+| Resource | Production (`main`) | Staging (`staging`) |
 | --- | --- | --- |
 | Worker | yea-or-nay | yea-or-nay-staging |
-| D1 database | yea-or-nay-db | yea-or-nay-staging-db |
-| R2 bucket | yea-or-nay-room-icons | yea-or-nay-staging-room-icons |
+| D1 | yea-or-nay-db | yea-or-nay-staging-db |
+| R2 | yea-or-nay-room-icons | yea-or-nay-staging-room-icons |
 
-Staging uses a named Wrangler environment with explicit bindings. Production keeps its existing top-level configuration and resource names. Accounts, sessions, uploads, and all other data are separate. Staging starts empty; production data is never copied. Both Workers run the daily cleanup cron.
+Accounts/uploads are separate. Do not copy production data to staging. Actions resolves the placeholder staging database UUID by name before migrations/deployment.
 
-For local staging development, run npm run db:staging:local and npm run dev:staging. The committed staging UUID is a placeholder; Actions resolves the real database UUID by name before migrations and deployment.
+PR checks build assets, typecheck both projects, run tests, and dry-run both environments without credentials. Merges run jobs in order:
 
-## GitHub Actions
+1. Build: package `dist/client` and bundled Worker under `dist/worker` together.
+2. Provision: reuse/create D1/R2 resources for the selected environment.
+3. Migrate: apply D1 migrations using resolved configuration.
+4. Deploy: publish `dist/worker/index.js` with `dist/client` assets and resolved config.
 
-PR checks enforce feature/* or bugfix/* into staging, and same-repository staging into main. They build assets, check TypeScript, test branch policy, and dry-run both Worker configurations without Cloudflare credentials.
+Configure GitHub variable `CLOUDFLARE_ACCOUNT_ID` and environment secret `CLOUDFLARE_API_TOKEN` with D1 Edit, Workers R2 Storage Edit, Workers Scripts Edit and Turnstile Sites Write permissions. Actions creates/reuses the selected environment's free signup widget and installs its secret directly in the Worker. If setup is unavailable, signup is disabled and Actions warns; grant the permission and rerun deployment. Credentials never enter frontend assets. Database IDs and bucket names identify resources, without granting access.
 
-Merges into staging or main run separate jobs:
-
-1. **Validate and build** generates static assets, checks types, tests branch policy, and uploads the validated Worker bundle.
-2. **Provision D1 and R2** checks the selected environment's resources by name, reuses existing resources, creates missing resources, and uploads the resolved Wrangler configuration.
-3. **Apply database migrations** downloads that config and applies pending migrations to the selected database.
-4. **Deploy Worker and cron** publishes the validated bundle with the resolved config. Wrangler creates the Worker if absent.
-
-Each job waits for the previous job to succeed. Deployments are serialized per branch and use separate staging and production GitHub Environments. Manual runs are allowed only on these two branches. Migrations must remain compatible with the currently deployed Worker because they run before deployment; deployment failures do not roll back migrations.
-
-Repository configuration:
-
-- Variable CLOUDFLARE_ACCOUNT_ID with the Cloudflare account ID.
-- Secret CLOUDFLARE_API_TOKEN with account-scoped D1 Edit, Workers R2 Storage Edit, and Workers Scripts Edit permissions.
-
-Credentials stay in Actions. Resolved database IDs pass between jobs as an artifact; provisioning does not commit generated configuration or push to protected branches. The same workflow provisions either environment.
-
-The Workers publish to separate workers.dev subdomains; find their URLs in deployment logs. See [Wrangler environments](https://developers.cloudflare.com/workers/wrangler/environments/) for binding behavior.
-
-## Account recovery
-
-This initial version does not verify email or send password reset messages. Keep your password safe; password recovery requires adding an email delivery provider later.
+Both environments retain daily cleanup. Migrations must remain compatible with the running Worker because they precede deployment. Verify Actions and the real Workers hostname after merging; a push alone is not deployment proof. Static hosting can run without usage charges, but API/D1/R2 usage remains subject to Cloudflare allowances. See [SPA routing](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/).

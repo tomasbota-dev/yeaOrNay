@@ -1,8 +1,19 @@
-import { STATIC_FILES } from './static-assets';
+import { body, HttpError, localTestMode, readImage, signupEnabled, verifySignup } from './security';
+import { consumeLimit } from './abuse';
+import { excludeFromSearch, isAppPath, notFoundPage, seoResponse } from './seo';
+export { AbuseLimiter } from './abuse';
+export { RoomRealtime } from './realtime';
 
 interface Env {
   DB: D1Database;
   ICONS: R2Bucket;
+  ASSETS: Fetcher;
+  ROOM_REALTIME: DurableObjectNamespace;
+  ABUSE_LIMITER: DurableObjectNamespace;
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  LOCAL_TEST_MODE?: string;
+  SEARCH_INDEXING?: string;
 }
 
 type UserRow = { id: string; email: string; display_name: string; password_hash: string; password_salt: string; avatar_url?: string | null };
@@ -12,9 +23,24 @@ const HASH_ITERATIONS = 100_000;
 const encoder = new TextEncoder();
 
 function json(data: unknown, status = 200, headers: HeadersInit = {}) {
-  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
+  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'x-robots-tag': 'noindex, nofollow, noarchive', ...headers } });
 }
-function fail(message: string, status = 400) { return json({ error: message }, status); }
+const ERROR_CODES: Record<string, string> = {
+  'Email or password didn’t match. Try again.': 'INVALID_CREDENTIALS',
+  'An account with that email already exists. Try logging in.': 'EMAIL_ALREADY_EXISTS',
+  'Please log in to continue.': 'AUTH_REQUIRED',
+  'You need to join this room first.': 'ROOM_MEMBERSHIP_REQUIRED',
+  'Room not found.': 'ROOM_NOT_FOUND',
+  'Idea not found.': 'IDEA_NOT_FOUND',
+  'Voting has closed.': 'VOTING_CLOSED',
+  'Voting has closed. Take a look at the result!': 'VOTING_CLOSED',
+  'You can’t vote on your own idea.': 'OWN_IDEA_VOTE',
+  'Request origin could not be verified.': 'INVALID_ORIGIN',
+};
+function fail(message: string, status = 400, retryAfter?: number) {
+  const statusCodes: Record<number, string> = { 400: 'VALIDATION_ERROR', 401: 'AUTH_REQUIRED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 409: 'CONFLICT', 413: 'PAYLOAD_TOO_LARGE', 415: 'UNSUPPORTED_MEDIA_TYPE', 429: 'RATE_LIMITED', 500: 'INTERNAL_ERROR', 503: 'SERVICE_UNAVAILABLE' };
+  return json({ error: message, code: ERROR_CODES[message] || statusCodes[status] || 'REQUEST_FAILED' }, status, retryAfter ? { 'retry-after': String(retryAfter) } : {});
+}
 function randomId() { return crypto.randomUUID(); }
 function randomToken(bytes = 32) { const data = crypto.getRandomValues(new Uint8Array(bytes)); return Array.from(data, n => n.toString(16).padStart(2, '0')).join(''); }
 async function sha256(value: string) { const digest = await crypto.subtle.digest('SHA-256', encoder.encode(value)); return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join(''); }
@@ -39,20 +65,10 @@ async function currentUser(request: Request, env: Env) {
   const session = cookie(request, 'yn_session');
   if (!session) return null;
   const tokenHash = await sha256(session);
-  const row = await env.DB.prepare('SELECT u.id, u.email, u.display_name, u.avatar_url, u.last_seen_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id_hash=? AND s.expires_at>?').bind(tokenHash, Date.now()).first<{ id: string; email: string; display_name: string; avatar_url: string | null; last_seen_at: number }>();
+  const row = await env.DB.prepare('SELECT u.id, u.email, u.display_name, u.avatar_url, u.last_seen_at, s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id_hash=? AND s.expires_at>?').bind(tokenHash, Date.now()).first<{ id: string; email: string; display_name: string; avatar_url: string | null; last_seen_at: number; expires_at: number }>();
   if (row && Date.now() - row.last_seen_at > 24 * 60 * 60_000) await env.DB.prepare('UPDATE users SET last_seen_at=? WHERE id=?').bind(Date.now(), row.id).run();
   return row ? { id: row.id, email: row.email, name: row.display_name, avatarUrl: row.avatar_url } : null;
 }
-async function body(request: Request) {
-  const size = Number(request.headers.get('content-length') || 0);
-  if (size > 12_000) throw new HttpError('That message is too long.', 413);
-  try {
-    const result = await request.json() as Record<string, unknown>;
-    if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error();
-    return result;
-  } catch { throw new HttpError('Please check the form and try again.', 400); }
-}
-class HttpError extends Error { constructor(message: string, public status = 400) { super(message); } }
 function stringField(value: unknown, max: number, label: string) {
   if (typeof value !== 'string') throw new HttpError(`${label} is required.`);
   const result = value.trim();
@@ -68,6 +84,33 @@ async function requireMember(roomId: string, userId: string, env: Env) {
   const member = await env.DB.prepare('SELECT 1 FROM room_members WHERE room_id=? AND user_id=?').bind(roomId, userId).first();
   if (!member) throw new HttpError('You need to join this room first.', 403);
 }
+async function limit(env: Env, key: string, count: number, seconds: number) {
+  let result;
+  try { result = await consumeLimit(env, await sha256(key), count, seconds); }
+  catch { throw new HttpError('Service is busy. Please try again shortly.', 503, 60); }
+  if (!result.allowed) throw new HttpError('Too many requests. Please wait and try again.', 429, result.retryAfter);
+}
+async function notifyRoom(env: Env, roomId: string, data: { revokeUserId?: string; deleted?: boolean } = {}) {
+  try {
+    const response = await env.ROOM_REALTIME.get(env.ROOM_REALTIME.idFromName(roomId)).fetch('https://room.internal/notify', {
+      method: 'POST', headers: { 'x-room-id': roomId, 'content-type': 'application/json' }, body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Notification rejected');
+  } catch { console.error('Room notification failed; clients will recover with a snapshot.'); }
+}
+async function userRoomIds(userId: string, env: Env) {
+  const rooms = await env.DB.prepare('SELECT room_id FROM room_members WHERE user_id=? UNION SELECT room_id FROM ideas WHERE author_id=? UNION SELECT i.room_id FROM votes v JOIN ideas i ON i.id=v.idea_id WHERE v.user_id=?').bind(userId,userId,userId).all<{room_id:string}>();
+  return rooms.results.map(room => room.room_id);
+}
+async function notifyUserRooms(userId: string, env: Env) {
+  for (const roomId of await userRoomIds(userId, env)) await notifyRoom(env,roomId);
+}
+async function requirePassword(request: Request, userId: string, env: Env) {
+  const input = await body(request);
+  if (typeof input.password !== 'string' || input.password.length < 10 || input.password.length > 128) throw new HttpError('Enter your password to confirm this action.', 403);
+  const user = await env.DB.prepare('SELECT password_hash,password_salt FROM users WHERE id=?').bind(userId).first<{password_hash:string;password_salt:string}>();
+  if (!user || !constantTimeEqual(await derivePassword(input.password, user.password_salt), user.password_hash)) throw new HttpError('Email or password didn’t match. Try again.', 403);
+}
 async function createSession(userId: string, env: Env) {
   const token = randomToken();
   const now = Date.now();
@@ -76,11 +119,15 @@ async function createSession(userId: string, env: Env) {
   return token;
 }
 async function auth(request: Request, env: Env, action: 'signup' | 'login') {
+  const address = request.headers.get('CF-Connecting-IP') || 'unknown';
+  await limit(env, `auth-ip:${address}`, 30, 900);
+  if (action === 'signup') await limit(env, `signup-ip:${address}`, 5, 3600);
   const input = await body(request);
   const email = stringField(input.email, 254, 'Email').toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError('Enter a valid email address.');
   if (typeof input.password !== 'string' || input.password.length < 10 || input.password.length > 128) throw new HttpError('Password must be 10 to 128 characters long.');
   if (action === 'signup') {
+    await verifySignup(request, env, input.turnstileToken);
     const existing = await env.DB.prepare('SELECT 1 FROM users WHERE email=?').bind(email).first();
     if (existing) throw new HttpError('An account with that email already exists. Try logging in.', 409);
     if (input.ageConfirmed !== true) throw new HttpError('Please confirm that you are 18 or older to create an account.', 403);
@@ -99,13 +146,8 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
     }
     user = { id, email, display_name: name, password_hash: hash, password_salt: salt, avatar_url: null };
   } else {
-    const address = request.headers.get('CF-Connecting-IP') || 'unknown';
-    const key = await sha256(`${address}|${email}`);
-    const now = Date.now();
-    const attempt = await env.DB.prepare('SELECT count, window_start FROM auth_attempts WHERE ip_hash=?').bind(key).first<{ count: number; window_start: number }>();
-    if (attempt && now - attempt.window_start < 15 * 60_000 && attempt.count >= 12) throw new HttpError('Too many tries. Please wait 15 minutes and try again.', 429);
-    if (!attempt || now - attempt.window_start >= 15 * 60_000) await env.DB.prepare('INSERT INTO auth_attempts(ip_hash,count,window_start) VALUES(?,1,?) ON CONFLICT(ip_hash) DO UPDATE SET count=1, window_start=excluded.window_start').bind(key, now).run();
-    else await env.DB.prepare('UPDATE auth_attempts SET count=count+1 WHERE ip_hash=?').bind(key).run();
+    await limit(env, `login-account:${email}`, 20, 900);
+    await limit(env, `login-pair:${address}:${email}`, 12, 900);
     user = await env.DB.prepare('SELECT id,email,display_name,password_hash,password_salt,avatar_url FROM users WHERE email=?').bind(email).first<UserRow>();
     const salt = user?.password_salt || '00000000000000000000000000000000';
     const expected = user?.password_hash || '0'.repeat(64);
@@ -114,6 +156,7 @@ async function auth(request: Request, env: Env, action: 'signup' | 'login') {
   }
   await env.DB.prepare('UPDATE users SET last_seen_at=? WHERE id=?').bind(Date.now(), user.id).run();
   const token = await createSession(user.id, env);
+  await notifyUserRooms(user.id,env);
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Date.now()).run();
   return json({ user: { id: user.id, email: user.email, name: user.display_name, avatarUrl: user.avatar_url || null } }, 200, { 'set-cookie': sessionCookie(token, SESSION_DAYS * 24 * 60 * 60) });
 }
@@ -133,6 +176,7 @@ async function createRoom(request: Request, userId: string, env: Env) {
   if (input.endsAt !== undefined && input.endsAt !== '') {
     endsAt = Number(input.endsAt);
     if (!Number.isFinite(endsAt) || endsAt <= created) throw new HttpError('Choose an end date and time in the future.');
+    if (endsAt > created + 30 * 24 * 60 * 60_000) throw new HttpError('Choose a deadline within the next 30 days.');
     duration = Math.ceil((endsAt - created) / 60_000);
   } else {
     duration = Number(input.duration);
@@ -140,8 +184,11 @@ async function createRoom(request: Request, userId: string, env: Env) {
     endsAt = created + duration * 60_000;
   }
   const icon = typeof input.icon === 'string' && ['🎲','🍜','🌿','🎬','🎨','🏖️','🎮','🍕','🎵','🧩'].includes(input.icon) ? input.icon : '🎲';
-  const room = await env.DB.prepare('INSERT INTO rooms(id,code,name,icon,host_id,duration_minutes,created_at,ends_at) VALUES(?,?,?,?,?,?,?,?) RETURNING id,code,name,icon,created_at,ends_at,status,host_id').bind(id, code, name, icon, userId, duration, created, endsAt).first();
-  await env.DB.prepare('INSERT INTO room_members(room_id,user_id,joined_at) VALUES(?,?,?)').bind(id, userId, created).run();
+  const result = await env.DB.batch([
+    env.DB.prepare('INSERT INTO rooms(id,code,name,icon,host_id,duration_minutes,created_at,ends_at) VALUES(?,?,?,?,?,?,?,?) RETURNING id,code,name,icon,created_at,ends_at,status,host_id').bind(id, code, name, icon, userId, duration, created, endsAt),
+    env.DB.prepare('INSERT INTO room_members(room_id,user_id,joined_at) VALUES(?,?,?)').bind(id, userId, created),
+  ]);
+  const room = result[0].results[0];
   return json({ room }, 201);
 }
 async function joinRoom(request: Request, userId: string, env: Env) {
@@ -152,6 +199,7 @@ async function joinRoom(request: Request, userId: string, env: Env) {
   const banned = await env.DB.prepare('SELECT 1 FROM room_bans WHERE room_id=? AND user_id=?').bind(room.id, userId).first();
   if (banned) throw new HttpError('The host removed you from this room.', 403);
   await env.DB.prepare('INSERT OR IGNORE INTO room_members(room_id,user_id,joined_at) VALUES(?,?,?)').bind(room.id, userId, Date.now()).run();
+  await notifyRoom(env, room.id);
   return json({ room });
 }
 async function roomSnapshot(code: string, userId: string, env: Env) {
@@ -168,7 +216,7 @@ async function roomSnapshot(code: string, userId: string, env: Env) {
       COALESCE(SUM(v.value),0) score, COALESCE(MAX(CASE WHEN v.user_id=? THEN v.value END),0) my_vote
       FROM ideas i JOIN users u ON u.id=i.author_id LEFT JOIN votes v ON v.idea_id=i.id
       WHERE i.room_id=? GROUP BY i.id ORDER BY score DESC,i.created_at ASC`).bind(userId, found.id).all(),
-    env.DB.prepare(`SELECT c.id,c.idea_id,c.body,c.created_at,u.display_name author_name FROM comments c JOIN users u ON u.id=c.user_id JOIN ideas i ON i.id=c.idea_id WHERE i.room_id=? ORDER BY c.created_at ASC LIMIT 300`).bind(found.id).all()
+    env.DB.prepare(`SELECT c.id,c.idea_id,c.body,c.created_at,u.display_name author_name FROM comments c JOIN users u ON u.id=c.user_id JOIN ideas i ON i.id=c.idea_id WHERE i.room_id=? ORDER BY c.created_at ASC LIMIT 500`).bind(found.id).all()
   ]);
   const ideaRows = ideas.results as Array<Record<string, any>>;
   const max = ideaRows.length ? Math.max(...ideaRows.map(i => Number(i.score))) : null;
@@ -189,8 +237,10 @@ async function moderateMember(request: Request, userId: string, env: Env, code: 
   if (memberId === room.host_id) throw new HttpError('The host can’t remove themselves.', 400);
   const member = await env.DB.prepare('SELECT 1 FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, memberId).first();
   if (!member) throw new HttpError('That person is no longer in this room.', 404);
-  if (action === 'ban') await env.DB.prepare('INSERT OR IGNORE INTO room_bans(room_id,user_id,created_at) VALUES(?,?,?)').bind(room.id, memberId, Date.now()).run();
-  await env.DB.prepare('DELETE FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, memberId).run();
+  const actions = [env.DB.prepare('DELETE FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, memberId)];
+  if (action === 'ban') actions.unshift(env.DB.prepare('INSERT OR IGNORE INTO room_bans(room_id,user_id,created_at) VALUES(?,?,?)').bind(room.id, memberId, Date.now()));
+  await env.DB.batch(actions);
+  await notifyRoom(env, room.id, { revokeUserId: memberId });
   return json({ok:true});
 }
 async function leaveRoom(userId: string, env: Env, code: string) {
@@ -199,6 +249,7 @@ async function leaveRoom(userId: string, env: Env, code: string) {
   if (room.host_id === userId) throw new HttpError('The room host cannot leave. Delete the room or transfer it first.', 400);
   const result = await env.DB.prepare('DELETE FROM room_members WHERE room_id=? AND user_id=?').bind(room.id, userId).run();
   if (!result.meta.changes) throw new HttpError('You are not a member of this room.', 404);
+  await notifyRoom(env, room.id, { revokeUserId: userId });
   return json({ok:true});
 }
 async function deleteRoom(userId: string, env: Env, code: string) {
@@ -206,6 +257,7 @@ async function deleteRoom(userId: string, env: Env, code: string) {
   if (!room) throw new HttpError('Room not found.', 404);
   if (room.host_id !== userId) throw new HttpError('Only the room host can delete this room.', 403);
   await env.DB.prepare('DELETE FROM rooms WHERE id=?').bind(room.id).run();
+  await notifyRoom(env, room.id, { deleted: true });
   if (room.icon?.startsWith('/room-icons/')) await env.ICONS.delete(room.icon.slice('/room-icons/'.length));
   return json({ok:true});
 }
@@ -218,6 +270,7 @@ async function submitFeedback(request: Request, userId: string, env: Env) {
   return json({ok:true},201);
 }
 async function removeAccount(userId: string, env: Env) {
+  const affectedRooms = await userRoomIds(userId,env);
   const user = await env.DB.prepare('SELECT avatar_url FROM users WHERE id=?').bind(userId).first<{avatar_url:string|null}>();
   if (user?.avatar_url?.startsWith('/profile-photos/')) await env.ICONS.delete(user.avatar_url.slice('/profile-photos/'.length));
   const hosted = await env.DB.prepare('SELECT id,icon FROM rooms WHERE host_id=?').bind(userId).all<{id:string;icon:string}>();
@@ -237,6 +290,7 @@ async function removeAccount(userId: string, env: Env) {
   await env.DB.prepare('DELETE FROM feedback WHERE user_id=?').bind(userId).run();
   await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(userId).run();
   await env.DB.prepare('DELETE FROM users WHERE id=?').bind(userId).run();
+  for (const roomId of affectedRooms) await notifyRoom(env,roomId,{revokeUserId:userId});
 }
 async function purgeExpiredData(env: Env) {
   const now = Date.now(), year = 365 * 24 * 60 * 60_000, cutoff = now - year;
@@ -255,28 +309,16 @@ async function uploadRoomIcon(request: Request, userId: string, env: Env, code: 
   const room = await env.DB.prepare('SELECT id,host_id,icon FROM rooms WHERE code=?').bind(code).first<{id:string;host_id:string;icon:string}>();
   if (!room) throw new HttpError('Room not found.',404);
   if (room.host_id !== userId) throw new HttpError('Only the room host can change its image.',403);
-  const size = Number(request.headers.get('content-length') || 0), type = request.headers.get('content-type') || '';
-  if (size > 262144) throw new HttpError('Choose an image smaller than 256 KB.',413);
-  if (!['image/jpeg','image/png','image/webp'].includes(type)) throw new HttpError('Use a JPG, PNG, or WebP image.',415);
-  const reader = request.body?.getReader();
-  if (!reader) throw new HttpError('Choose an image file.',400);
-  const chunks: Uint8Array[] = []; let total = 0;
-  while (true) {
-    const part = await reader.read();
-    if (part.done) break;
-    total += part.value.byteLength;
-    if (total > 262144) { await reader.cancel(); throw new HttpError('Choose an image smaller than 256 KB.',413); }
-    chunks.push(part.value);
-  }
-  if (!total) throw new HttpError('Choose an image file.',400);
-  const bytes = new Uint8Array(total); let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk,offset); offset += chunk.byteLength; }
-  const valid = type === 'image/jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 : type === 'image/png' ? bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 : bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
-  if (!valid) throw new HttpError('That file doesn’t look like a supported image.',415);
+  await limit(env,`room-write:${room.id}`,60,60);
+  const {bytes,type} = await readImage(request);
   const key = randomId();
   await env.ICONS.put(key,bytes,{httpMetadata:{contentType:type}});
-  await env.DB.prepare('UPDATE rooms SET icon=? WHERE id=?').bind(`/room-icons/${key}`,room.id).run();
+  try {
+    const result = await env.DB.prepare('UPDATE rooms SET icon=? WHERE id=? AND host_id=? AND icon=?').bind(`/room-icons/${key}`,room.id,userId,room.icon).run();
+    if (!result.meta.changes) throw new HttpError('Your image changed elsewhere. Please try again.',409);
+  } catch (error) { await env.ICONS.delete(key); throw error; }
   if (room.icon?.startsWith('/room-icons/')) await env.ICONS.delete(room.icon.slice('/room-icons/'.length));
+  await notifyRoom(env,room.id);
   return json({icon:`/room-icons/${key}`});
 }
 async function updateProfile(request: Request, userId: string, env: Env) {
@@ -284,37 +326,30 @@ async function updateProfile(request: Request, userId: string, env: Env) {
   const name = stringField(input.name, 40, 'Name');
   const email = stringField(input.email, 254, 'Email').toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError('Enter a valid email address.');
-  try {
-    await env.DB.prepare('UPDATE users SET display_name=?,email=? WHERE id=?').bind(name,email,userId).run();
-  } catch (error) {
-    if (String(error).includes('UNIQUE')) throw new HttpError('An account with that email already exists.',409);
-    throw error;
-  }
+  const existing = await env.DB.prepare('SELECT email FROM users WHERE id=?').bind(userId).first<{email:string}>();
+  if (!existing || email !== existing.email) throw new HttpError('Email changes require verification and are not available yet.',403);
+  await env.DB.prepare('UPDATE users SET display_name=? WHERE id=?').bind(name,userId).run();
+  await notifyUserRooms(userId,env);
   return json({user: await env.DB.prepare('SELECT id,email,display_name name,avatar_url avatarUrl FROM users WHERE id=?').bind(userId).first()});
 }
 async function uploadProfilePhoto(request: Request, userId: string, env: Env) {
-  const size = Number(request.headers.get('content-length') || 0), type = request.headers.get('content-type') || '';
-  if (size > 262144) throw new HttpError('Choose an image smaller than 256 KB.',413);
-  if (!['image/jpeg','image/png','image/webp'].includes(type)) throw new HttpError('Use a JPG, PNG, or WebP image.',415);
-  const reader = request.body?.getReader();
-  if (!reader) throw new HttpError('Choose an image file.',400);
-  const chunks: Uint8Array[] = []; let total = 0;
-  while (true) { const part = await reader.read(); if (part.done) break; total += part.value.byteLength; if (total > 262144) { await reader.cancel(); throw new HttpError('Choose an image smaller than 256 KB.',413); } chunks.push(part.value); }
-  if (!total) throw new HttpError('Choose an image file.',400);
-  const bytes = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { bytes.set(chunk,offset); offset += chunk.byteLength; }
-  const valid = type === 'image/jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 : type === 'image/png' ? bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 : bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
-  if (!valid) throw new HttpError('That file doesn’t look like a supported image.',415);
+  const {bytes,type} = await readImage(request);
   const existing = await env.DB.prepare('SELECT avatar_url FROM users WHERE id=?').bind(userId).first<{avatar_url:string|null}>();
   const key = randomId(); await env.ICONS.put(key,bytes,{httpMetadata:{contentType:type}});
   const avatarUrl = `/profile-photos/${key}`;
-  await env.DB.prepare('UPDATE users SET avatar_url=? WHERE id=?').bind(avatarUrl,userId).run();
+  try {
+    const result = await env.DB.prepare('UPDATE users SET avatar_url=? WHERE id=? AND avatar_url IS ?').bind(avatarUrl,userId,existing?.avatar_url || null).run();
+    if (!result.meta.changes) throw new HttpError('Your image changed elsewhere. Please try again.',409);
+  } catch (error) { await env.ICONS.delete(key); throw error; }
   if (existing?.avatar_url?.startsWith('/profile-photos/')) await env.ICONS.delete(existing.avatar_url.slice('/profile-photos/'.length));
+  await notifyUserRooms(userId,env);
   return json({avatarUrl});
 }
 async function removeProfilePhoto(userId: string, env: Env) {
   const existing = await env.DB.prepare('SELECT avatar_url FROM users WHERE id=?').bind(userId).first<{avatar_url:string|null}>();
-  await env.DB.prepare('UPDATE users SET avatar_url=NULL WHERE id=?').bind(userId).run();
+  await env.DB.prepare('UPDATE users SET avatar_url=NULL WHERE id=? AND avatar_url IS ?').bind(userId,existing?.avatar_url || null).run();
   if (existing?.avatar_url?.startsWith('/profile-photos/')) await env.ICONS.delete(existing.avatar_url.slice('/profile-photos/'.length));
+  await notifyUserRooms(userId,env);
   return json({avatarUrl:null});
 }
 async function addIdea(request: Request, userId: string, env: Env, code: string) {
@@ -322,6 +357,7 @@ async function addIdea(request: Request, userId: string, env: Env, code: string)
   if (!room) throw new HttpError('Room not found.', 404);
   await requireMember(room.id, userId, env);
   if (room.status !== 'open' || room.ends_at <= Date.now()) { await env.DB.prepare("UPDATE rooms SET status='closed' WHERE id=?").bind(room.id).run(); throw new HttpError('Voting has closed. Take a look at the result!', 409); }
+  await limit(env,`room-write:${room.id}`,60,60);
   const input = await body(request);
   const title = stringField(input.title, 100, 'Idea');
   const details = typeof input.details === 'string' ? input.details.trim() : '';
@@ -329,28 +365,33 @@ async function addIdea(request: Request, userId: string, env: Env, code: string)
   const count = await env.DB.prepare('SELECT COUNT(*) count FROM ideas WHERE room_id=?').bind(room.id).first<{ count: number }>();
   if ((count?.count || 0) >= 100) throw new HttpError('This room has reached its 100 idea limit.', 409);
   await env.DB.prepare('INSERT INTO ideas(id,room_id,author_id,title,details,created_at) VALUES(?,?,?,?,?,?)').bind(randomId(), room.id, userId, title, details, Date.now()).run();
+  await notifyRoom(env,room.id);
   return json({ ok: true }, 201);
 }
 async function castVote(request: Request, userId: string, env: Env, ideaId: string) {
   const input = await body(request);
-  if (input.value !== 1 && input.value !== -1) throw new HttpError('Choose an upvote or a downvote.');
+  if (input.value !== 1 && input.value !== -1 && input.value !== 0) throw new HttpError('Choose an upvote or a downvote.');
   const idea = await env.DB.prepare('SELECT i.id,i.author_id,i.room_id,r.status,r.ends_at FROM ideas i JOIN rooms r ON r.id=i.room_id WHERE i.id=?').bind(ideaId).first<{ id: string; author_id: string; room_id: string; status: string; ends_at: number }>();
   if (!idea) throw new HttpError('Idea not found.', 404);
   await requireMember(idea.room_id, userId, env);
+  await limit(env,`room-write:${idea.room_id}`,60,60);
   if (idea.author_id === userId) throw new HttpError('You can’t vote on your own idea.', 403);
   if (idea.status !== 'open' || idea.ends_at <= Date.now()) { await env.DB.prepare("UPDATE rooms SET status='closed' WHERE id=?").bind(idea.room_id).run(); throw new HttpError('Voting has closed.', 409); }
   const previous = await env.DB.prepare('SELECT value FROM votes WHERE idea_id=? AND user_id=?').bind(ideaId, userId).first<{ value: number }>();
-  if (previous?.value === input.value) await env.DB.prepare('DELETE FROM votes WHERE idea_id=? AND user_id=?').bind(ideaId, userId).run();
+  if (input.value === 0 || previous?.value === input.value) await env.DB.prepare("DELETE FROM votes WHERE idea_id=? AND user_id=? AND EXISTS (SELECT 1 FROM ideas i JOIN rooms r ON r.id=i.room_id JOIN room_members m ON m.room_id=r.id WHERE i.id=votes.idea_id AND m.user_id=votes.user_id AND r.status='open' AND r.ends_at>?)").bind(ideaId, userId,Date.now()).run();
   else await env.DB.prepare('INSERT INTO votes(idea_id,user_id,value,created_at) VALUES(?,?,?,?) ON CONFLICT(idea_id,user_id) DO UPDATE SET value=excluded.value,created_at=excluded.created_at').bind(ideaId, userId, input.value, Date.now()).run();
+  await notifyRoom(env,idea.room_id);
   return json({ ok: true });
 }
 async function addComment(request: Request, userId: string, env: Env, ideaId: string) {
   const idea = await env.DB.prepare('SELECT room_id FROM ideas WHERE id=?').bind(ideaId).first<{ room_id: string }>();
   if (!idea) throw new HttpError('Idea not found.', 404);
   await requireMember(idea.room_id, userId, env);
+  await limit(env,`room-write:${idea.room_id}`,60,60);
   const input = await body(request);
   const text = stringField(input.body, 280, 'Comment');
   await env.DB.prepare('INSERT INTO comments(id,idea_id,user_id,body,created_at) VALUES(?,?,?,?,?)').bind(randomId(), ideaId, userId, text, Date.now()).run();
+  await notifyRoom(env,idea.room_id);
   return json({ ok: true }, 201);
 }
 async function closeRoom(userId: string, env: Env, code: string) {
@@ -359,25 +400,59 @@ async function closeRoom(userId: string, env: Env, code: string) {
   await requireMember(room.id, userId, env);
   if (room.host_id !== userId) throw new HttpError('Only the room host can end voting early.', 403);
   await env.DB.prepare("UPDATE rooms SET status='closed' WHERE id=?").bind(room.id).run();
+  await notifyRoom(env,room.id);
   return json({ ok: true });
 }
 async function apiRoute(request: Request, env: Env) {
   const url = new URL(request.url), path = url.pathname, method = request.method;
-  if (method !== 'GET' && url.origin !== request.headers.get('Origin') && request.headers.get('Origin')) throw new HttpError('Request origin could not be verified.', 403);
+  if (method !== 'GET' || request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    if (request.headers.get('Origin') !== url.origin || request.headers.get('Sec-Fetch-Site') === 'cross-site') throw new HttpError('Request origin could not be verified.', 403);
+  }
+  const address = request.headers.get('CF-Connecting-IP') || 'unknown';
+  await limit(env,`api-ip:${address}`,240,60);
+  if (path === '/api/config' && method === 'GET') return json({ turnstileSiteKey: localTestMode(request,env) ? null : env.TURNSTILE_SITE_KEY || null, signupEnabled: signupEnabled(request,env) });
   if (path === '/api/auth/signup' && method === 'POST') return auth(request, env, 'signup');
   if (path === '/api/auth/login' && method === 'POST') return auth(request, env, 'login');
   const user = await currentUser(request, env);
   if (!user) return fail('Please log in to continue.', 401);
+  await limit(env,`user-${method === 'GET' ? 'read' : 'write'}:${user.id}`,method === 'GET' ? 120 : 60,60);
+  if (method !== 'GET') {
+    if (path === '/api/rooms') await limit(env,`create-room:${user.id}`,5,3600);
+    else if (path === '/api/rooms/join') await limit(env,`join-room:${user.id}`,20,600);
+    else if (path === '/api/feedback') await limit(env,`feedback:${user.id}`,3,3600);
+    else if (path.endsWith('/photo') || path.endsWith('/icon')) await limit(env,`image:${user.id}`,10,3600);
+    else if (path.endsWith('/comments')) await limit(env,`comment:${user.id}`,10,60);
+    else if (path.endsWith('/ideas')) await limit(env,`idea:${user.id}`,10,60);
+    else if (path === '/api/account') await limit(env,`sensitive:${user.id}`,5,900);
+  }
+  const events = path.match(/^\/api\/rooms\/([^/]+)\/events$/);
+  if (events && method === 'GET') {
+    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return new Response(null,{status:426,headers:{Upgrade:'websocket'}});
+    if (request.headers.get('Origin') !== url.origin) throw new HttpError('Request origin could not be verified.',403);
+    await limit(env,`socket:${user.id}`,20,60);
+    const code = decodeURIComponent(events[1]).toUpperCase();
+    const room = await env.DB.prepare('SELECT id FROM rooms WHERE code=?').bind(code).first<{id:string}>();
+    if (!room) throw new HttpError('Room not found.',404);
+    await requireMember(room.id,user.id,env);
+    const hash = await sha256(cookie(request,'yn_session') || '');
+    const session = await env.DB.prepare('SELECT expires_at FROM sessions WHERE id_hash=? AND user_id=? AND expires_at>?').bind(hash,user.id,Date.now()).first<{expires_at:number}>();
+    if (!session) throw new HttpError('Please log in to continue.',401);
+    return env.ROOM_REALTIME.get(env.ROOM_REALTIME.idFromName(room.id)).fetch('https://room.internal/connect', {
+      headers: { Upgrade: 'websocket', 'x-room-id': room.id, 'x-user-id': user.id, 'x-session-hash':hash, 'x-session-expires':String(session.expires_at) },
+    });
+  }
   if (path === '/api/me' && method === 'GET') return json({ user });
   if (path === '/api/profile' && method === 'PUT') return updateProfile(request,user.id,env);
   if (path === '/api/profile/photo' && method === 'POST') return uploadProfilePhoto(request,user.id,env);
   if (path === '/api/profile/photo' && method === 'DELETE') return removeProfilePhoto(user.id,env);
   if (path === '/api/account' && method === 'DELETE') {
+    await requirePassword(request,user.id,env);
     await removeAccount(user.id,env);
     return json({ok:true},200,{'set-cookie':sessionCookie('',0)});
   }
   if (path === '/api/auth/logout' && method === 'POST') {
     const session = cookie(request, 'yn_session'); if (session) await env.DB.prepare('DELETE FROM sessions WHERE id_hash=?').bind(await sha256(session)).run();
+    await notifyUserRooms(user.id,env);
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
   }
   if (path === '/api/rooms' && method === 'GET') return listRooms(user.id, env);
@@ -411,13 +486,8 @@ function secureAssetResponse(response: Response) {
   headers.set('x-content-type-options', 'nosniff');
   headers.set('referrer-policy', 'strict-origin-when-cross-origin');
   headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
-  headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+  headers.set('content-security-policy', "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-function staticAsset(path: string) {
-  const asset = STATIC_FILES[path] || STATIC_FILES['/'];
-  const cache = path === '/' || asset.type.startsWith('text/html') ? 'no-cache' : 'public, max-age=300';
-  return secureAssetResponse(new Response(asset.body, { headers: { 'content-type': asset.type, 'cache-control': cache } }));
 }
 export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
@@ -426,13 +496,41 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const iconPath = new URL(request.url).pathname.match(/^\/room-icons\/([a-f0-9-]{36})$/);
-      if (iconPath && request.method === 'GET') { const object = await env.ICONS.get(iconPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
+      if (iconPath && request.method === 'GET') { await limit(env,`media:${request.headers.get('CF-Connecting-IP') || 'unknown'}`,240,60); const object = await env.ICONS.get(iconPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff','x-robots-tag':'noindex, nofollow, noarchive'}}); }
       const profilePhotoPath = new URL(request.url).pathname.match(/^\/profile-photos\/([a-f0-9-]{36})$/);
-      if (profilePhotoPath && request.method === 'GET') { const object = await env.ICONS.get(profilePhotoPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff'}}); }
-      if (new URL(request.url).pathname.startsWith('/api/')) return await apiRoute(request, env);
-      return staticAsset(new URL(request.url).pathname);
+      if (profilePhotoPath && request.method === 'GET') { await limit(env,`media:${request.headers.get('CF-Connecting-IP') || 'unknown'}`,240,60); const object = await env.ICONS.get(profilePhotoPath[1]); if (!object) return new Response('Not found',{status:404}); return new Response(object.body,{headers:{'content-type':object.httpMetadata?.contentType || 'image/webp','cache-control':'public, max-age=3600','x-content-type-options':'nosniff','x-robots-tag':'noindex, nofollow, noarchive'}}); }
+      const url = new URL(request.url);
+      if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return excludeFromSearch(await apiRoute(request, env));
+      if (url.pathname === '/privacy.html' || url.pathname === '/terms.html') {
+        url.pathname = url.pathname.slice(0, -5);
+        return secureAssetResponse(Response.redirect(url.toString(), 308));
+      }
+      const publicResponse = await seoResponse(request, env.ASSETS, env.SEARCH_INDEXING);
+      if (publicResponse) return secureAssetResponse(publicResponse);
+      const path = url.pathname.replace(/\/+$/, '') || '/';
+      if (isAppPath(path) && (request.method === 'GET' || request.method === 'HEAD')) {
+        if (url.pathname !== path) {
+          url.pathname = path;
+          return secureAssetResponse(excludeFromSearch(Response.redirect(url.href, 308)));
+        }
+        const appUrl = new URL('/index.html', url);
+        const asset = await env.ASSETS.fetch(new Request(appUrl, { method: request.method }));
+        const headers = new Headers(asset.headers);
+        headers.set('cache-control', 'no-store');
+        return secureAssetResponse(excludeFromSearch(new Response(asset.body, { status: asset.status, headers })));
+      }
+      // Only real assets may fall through; never turn an unknown URL into SPA HTML.
+      if (path !== '/index.html' && path !== '/public.html') {
+        const asset = await env.ASSETS.fetch(request);
+        if (asset.status !== 404 && !asset.headers.get('content-type')?.includes('text/html')) return secureAssetResponse(excludeFromSearch(asset));
+      }
+      return secureAssetResponse(notFoundPage(request));
     } catch (error) {
-      if (error instanceof HttpError) return fail(error.message, error.status);
+      if (error instanceof HttpError) return fail(error.message, error.status, error.retryAfter);
+      const message = String(error);
+      if (message.includes('APP_CAPACITY')) return fail('This account or room has reached its capacity. Please remove unused content.',409);
+      if (message.includes('APP_VOTING_CLOSED_OR_MEMBERSHIP')) return fail('Room access or voting status changed. Refresh and try again.',409);
+      if (message.includes('APP_MEMBERSHIP')) return fail('Room access changed. Refresh and try again.',403);
       console.error('Request failed', error);
       return fail('Something went wrong. Please try again.', 500);
     }

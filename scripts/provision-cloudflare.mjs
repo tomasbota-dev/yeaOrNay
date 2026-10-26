@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { provisionTurnstile } from './provision-turnstile.mjs';
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
@@ -33,7 +34,10 @@ async function api(path, options = {}) {
   const payload = await response.json();
   if (!response.ok || !payload.success) {
     const reasons = (payload.errors || []).map(({ code, message }) => `${code}: ${message}`).join('; ');
-    throw new Error(`Cloudflare API ${options.method || 'GET'} ${path} failed (${response.status})${reasons ? `: ${reasons}` : ''}`);
+    const error = new Error(`Cloudflare API ${options.method || 'GET'} ${path} failed (${response.status})${reasons ? `: ${reasons}` : ''}`);
+    // Status/codes/path are safe diagnostics; provider messages can echo input.
+    error.diagnostic = `${options.method || 'GET'} ${path.split('?')[0]} HTTP ${response.status}; codes ${(payload.errors || []).map(({code})=>code).join(',') || 'none'}`;
+    throw error;
   }
   return payload.result;
 }
@@ -70,5 +74,21 @@ for (const bucketBinding of target.r2_buckets || []) {
   }
 }
 
+if (process.env.PROVISION_TURNSTILE === 'true') {
+  // A missing permission must never silently turn bot verification off.
+  target.vars = { ...target.vars, TURNSTILE_SITE_KEY: '' };
+  try {
+    let hostname = target.vars.TURNSTILE_HOSTNAME;
+    if (!hostname) {
+      const { subdomain } = await api('/workers/subdomain');
+      if (!subdomain) throw new Error('Missing Workers hostname');
+      hostname = `${target.name}.${subdomain}.workers.dev`;
+    }
+    target.vars.TURNSTILE_SITE_KEY = await provisionTurnstile({ api, target, hostname });
+    console.log('Signup protection configured for the selected environment.');
+  } catch (error) {
+    console.warn(`::warning::Turnstile setup unavailable. Signup remains disabled. Verify Turnstile Sites Write and rerun deployment.${error.diagnostic ? ` ${error.diagnostic}` : ''}`);
+  }
+}
 await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 console.log('Cloudflare resource bindings are ready for Wrangler.');
